@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#223c30" />
+    <meta
+      name="description"
+      content="Sophia helps your household cook together, split dishes for different preferences, and plan groceries from confirmed cooking history. An Alexa+ web simulation."
+    />
+    <title>Sophia — a kitchen for everyone</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='20' fill='%23223c30'/%3E%3Cpath d='M43 18C22 9 14 33 33 33s10 22-12 12' fill='none' stroke='%23f5dba7' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/recipes.css" />
+    <link rel="stylesheet" href="/kitchen.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to kitchen</a>
+    <div id="app">
+      <div class="boot-screen">
+        <span class="brand-mark">s</span>
+        <h1>Something good is cooking.</h1>
+        <p>Opening your kitchen…</p>
+        <span class="loading-line"></span>
+      </div>
+    </div>
+    <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+    <dialog id="reset-dialog" class="reset-dialog">
+      <form method="dialog">
+        <span class="eyebrow">A fresh start</span>
+        <h2>Reset the demo kitchen?</h2>
+        <p>
+          This restores the sample pantry and history and clears your current cooking session, shopping list, and
+          changes.
+        </p>
+        <div class="dialog-actions">
+          <button class="button button-quiet" value="cancel">Keep my kitchen</button
+          ><button class="button button-primary" id="confirm-reset" value="confirm">Reset demo</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="history-dialog" class="reset-dialog">
+      <form method="dialog">
+        <span class="eyebrow">Make it your own</span>
+        <h2>Start your own cooking record?</h2>
+        <p>
+          This clears recorded meals and requests, including the synthetic sample meals. Grocery suggestions will start
+          learning from meals you cook and confirm from now on.
+        </p>
+        <div class="dialog-actions">
+          <button class="button button-quiet" value="cancel">Keep this history</button
+          ><button class="button button-primary" value="confirm">Clear cooking history</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="cancel-dialog" class="reset-dialog">
+      <form method="dialog">
+        <span class="eyebrow">Change of plans</span>
+        <h2>Cancel this meal?</h2>
+        <p>
+          Sophia won't record it as cooked and won't change your pantry. The steps you've confirmed for this meal will
+          be cleared.
+        </p>
+        <div class="dialog-actions">
+          <button class="button button-quiet" value="cancel">Keep cooking</button
+          ><button class="button button-primary" value="confirm">Cancel meal</button>
+        </div>
+      </form>
+    </dialog>
+    <noscript>Sophia needs JavaScript enabled to run the interactive cooking assistant.</noscript>
+  </body>
+</html>

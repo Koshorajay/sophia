@@ -1,0 +1,124 @@
+#recipes {
+  scroll-margin-top: 24px;
+}
+.recipe-tools {
+  display: flex;
+  align-items: end;
+  gap: 20px;
+  margin-bottom: 14px;
+}
+.recipe-tools .field {
+  flex: 1;
+}
+.recipe-tools p {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+  padding-bottom: 3px;
+}
+.recipe-tools input {
+  background: var(--paper);
+  padding: 12px;
+}
+.recipe-filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.recipe-filters button {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.recipe-filters button[aria-pressed='true'] {
+  background: var(--forest);
+  color: var(--paper);
+  border-color: var(--forest);
+}
+.recipe-count {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 13px;
+}
+.recipe-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 17px 0 24px;
+}
+.recipe-pagination span {
+  font-size: 13px;
+  color: var(--muted);
+}
+.recipe-pagination button:disabled {
+  cursor: default;
+}
+.dish-card {
+  text-align: left;
+}
+.dish-choose svg {
+  width: 13px;
+  height: 13px;
+}
+.dish-art.curry,
+.dish-art.soup {
+  background: #f3e7d7;
+}
+.dish-art.greens {
+  background: #e5ecd9;
+}
+.dish-art.breakfast,
+.dish-art.porridge,
+.dish-art.idli {
+  background: #f2ebd8;
+}
+.pantry-search {
+  margin-bottom: 22px;
+}
+.pantry-name small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  margin-top: 3px;
+}
+@media (max-width: 760px) {
+  #recipes,
+  #plan-form {
+    scroll-margin-top: 120px;
+  }
+}
+@media (max-width: 480px) {
+  .recipe-tools {
+    display: block;
+  }
+  .recipe-tools p {
+    margin-top: 9px;
+    font-size: 13px;
+  }
+  .recipe-tools p br {
+    display: none;
+  }
+  .recipe-filters button {
+    font-size: 13px;
+    padding: 8px 10px;
+  }
+  .dish-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .dish-info h3 {
+    min-height: 0;
+  }
+  .dish-art {
+    height: 120px;
+  }
+  .dish-art svg {
+    width: 120px;
+    height: 120px;
+  }
+}

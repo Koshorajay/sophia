@@ -1,0 +1,13 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.data/
+.deploy/
+coverage/
+*.log
+*.zip
+screenshots/
+
+# Private hackathon planning notes (not part of the public project)
+submission/

@@ -1,0 +1,1137 @@
+/* Voice input, step timers and the full-screen kitchen mode. */
+:root {
+  --kitchen-bg: #1f3529;
+  --kitchen-ink: #f8f6ef;
+  --kitchen-muted: #c3cfba;
+  --kitchen-line: #ffffff26;
+}
+
+/* Mic buttons and voice states */
+.mic-button {
+  border: 1px solid #d3dbc8;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--paper);
+  color: var(--forest);
+  display: grid;
+  place-items: center;
+  flex: none;
+  position: relative;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  transition:
+    background 0.16s,
+    color 0.16s,
+    border-color 0.16s;
+}
+.mic-button:hover {
+  background: #eef1e6;
+}
+.mic-button.unsupported {
+  color: #9aa18c;
+  border-style: dashed;
+}
+.chat-form {
+  align-items: center;
+}
+.chat-form .send-button {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+}
+.topbar-mic {
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+}
+html[data-voice='listening'] .mic-button:not(.unsupported) {
+  background: var(--orange);
+  border-color: var(--orange);
+  color: #fff;
+  animation: mic-pulse 1.4s ease-out infinite;
+}
+html[data-voice='thinking'] .mic-button:not(.unsupported) {
+  background: var(--sage);
+  border-color: #c9d3bb;
+}
+html[data-voice='thinking'] .mic-button:not(.unsupported)::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  border: 2px solid transparent;
+  border-top-color: var(--forest);
+  animation: spin 1s linear infinite;
+}
+html[data-voice='speaking'] .mic-button:not(.unsupported) {
+  background: var(--forest);
+  border-color: var(--forest);
+  color: #fff;
+}
+html[data-voice='listening'] .assistant-orb {
+  animation: mic-pulse 1.4s ease-out infinite;
+}
+html[data-voice='speaking'] .assistant-orb {
+  animation: orb-speak 1s ease-in-out infinite alternate;
+}
+
+.voice-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 16px;
+  flex: none;
+}
+.voice-indicator i {
+  width: 4px;
+  height: 6px;
+  border-radius: 3px;
+  background: #b5bea6;
+}
+html[data-voice='listening'] .voice-indicator i {
+  background: var(--orange);
+  animation: voice-bar 0.9s ease-in-out infinite;
+}
+html[data-voice='speaking'] .voice-indicator i {
+  background: var(--forest);
+  animation: voice-bar 0.7s ease-in-out infinite;
+}
+html[data-voice='thinking'] .voice-indicator i {
+  background: #8c9977;
+  animation: voice-dot 1.1s ease-in-out infinite;
+}
+.voice-indicator i:nth-child(2) {
+  animation-delay: 0.15s !important;
+}
+.voice-indicator i:nth-child(3) {
+  animation-delay: 0.3s !important;
+}
+
+.voice-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -2px 14px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #66705f;
+}
+.voice-status {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.hands-free-toggle {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 30px;
+  border: 1px solid #d9dfcf;
+  background: var(--paper);
+  color: #5f6c56;
+}
+.hands-free-toggle.on {
+  background: var(--forest);
+  border-color: var(--forest);
+  color: #fff;
+}
+
+.voice-float {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  z-index: 29;
+  display: none;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 32px);
+  padding: 12px 18px;
+  border-radius: 40px;
+  background: var(--forest);
+  color: #fff;
+  font-size: 15px;
+  line-height: 1.4;
+  box-shadow: 0 10px 30px #1a2f2b40;
+}
+.voice-float .voice-indicator i {
+  background: #f0d294 !important;
+}
+html[data-voice='listening'] .voice-float,
+html[data-voice='thinking'] .voice-float,
+html[data-voice='speaking'] .voice-float {
+  display: flex;
+}
+html[data-voice='listening'] .toast-region,
+html[data-voice='thinking'] .toast-region,
+html[data-voice='speaking'] .toast-region {
+  bottom: 86px;
+}
+html.kitchen-open .voice-float {
+  display: none !important;
+}
+html.kitchen-open .toast-region {
+  bottom: auto;
+  top: 96px;
+}
+html.kitchen-open .toast {
+  background: var(--kitchen-ink);
+  color: var(--forest);
+  font-size: 17px;
+  border-color: #f0d294;
+  box-shadow: 0 10px 30px #0000004d;
+}
+html.kitchen-open .toast.error {
+  background: #f8e7da;
+  color: #8e4d38;
+}
+
+/* Small fixes for the larger type */
+.crumb-root {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+.provider-badge {
+  white-space: nowrap;
+}
+
+/* Voice replies and the Stop control */
+.assistant-head {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+}
+.assistant-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.voice-replies {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: start;
+  min-height: 40px;
+  padding: 0 16px 0 12px;
+  border-radius: 30px;
+  border: 1px solid #ffffff4d;
+  background: #ffffff14;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition:
+    background 0.16s,
+    color 0.16s;
+}
+.voice-replies:hover {
+  background: #ffffff26;
+}
+.voice-replies.on {
+  background: #f0d294;
+  border-color: #f0d294;
+  color: var(--forest);
+}
+.stop-speaking {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 30px;
+  border: 1px solid var(--orange);
+  background: var(--orange);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+html[data-voice='speaking'] .stop-speaking {
+  display: inline-flex;
+}
+html[data-voice='speaking'] .voice-bar .hands-free-toggle {
+  display: none;
+}
+.voice-float .stop-speaking {
+  min-height: 36px;
+  margin-left: 4px;
+  border-color: #f0d294;
+  background: #f0d294;
+  color: var(--forest);
+}
+
+/* Activity feed */
+.activity-count {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 7px;
+  border-radius: 20px;
+  background: #eceee3;
+  color: #66705f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Cooking session additions */
+.session-heading-side {
+  display: flex;
+  flex-direction: column;
+  align-items: end;
+  gap: 10px;
+  flex: none;
+}
+.next-step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.timer-start.button-outline {
+  border-color: #d6c7aa;
+  background: #fbf6ec;
+  color: #7b5a2f;
+}
+.timer-panel.timer-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #fffaf1;
+  border: 1px solid #e6d6b8;
+  color: #6d5530;
+}
+.timer-panel.timer-card .timer-digits {
+  font-size: 32px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
+  color: var(--ink);
+}
+.timer-panel.timer-card .timer-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  flex: 1;
+  min-width: 180px;
+}
+.timer-panel.timer-card .timer-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+.timer-panel.timer-card .timer-for {
+  font-size: 14px;
+  flex-basis: 100%;
+  order: 2;
+}
+.timer-panel.timer-card .button {
+  order: 3;
+}
+.timer-panel.done {
+  animation: timer-done 1.2s ease-in-out infinite alternate;
+}
+.timer-panel.timer-card.done {
+  background: var(--orange-light);
+  border-color: #e4b897;
+}
+.timer-pill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 260px;
+  padding: 8px 12px;
+  border-radius: 30px;
+  border: 1px solid #e4c3a7;
+  background: var(--orange-light);
+  color: #8e4d38;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.timer-pill [data-timer-left] {
+  font-variant-numeric: tabular-nums;
+}
+.timer-pill-label {
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.timer-pill.done {
+  background: var(--orange);
+  border-color: var(--orange);
+  color: #fff;
+  animation: timer-done 1.2s ease-in-out infinite alternate;
+}
+
+/* Kitchen mode: an Echo Show style view with one step and very large type */
+html.kitchen-open,
+html.kitchen-open body {
+  overflow: hidden;
+}
+.kitchen {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: radial-gradient(circle at 82% 18%, #2e4d3b 0, var(--kitchen-bg) 58%);
+  color: var(--kitchen-ink);
+}
+.kitchen-top {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 20px 32px 16px;
+}
+.kitchen-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.kitchen-heading .brand-mark {
+  width: 40px;
+  height: 44px;
+  font-size: 38px;
+  background: #f0d294;
+  color: var(--forest);
+  flex: none;
+}
+.kitchen-heading strong {
+  display: block;
+  font-family: Georgia, serif;
+  font-weight: 400;
+  font-size: 24px;
+  line-height: 1.2;
+}
+.kitchen-heading span {
+  display: block;
+  font-size: 16px;
+  color: var(--kitchen-muted);
+  margin-top: 3px;
+}
+.kitchen-progress {
+  flex: 1;
+  min-width: 80px;
+  height: 10px;
+  border-radius: 10px;
+  background: #ffffff1f;
+  overflow: hidden;
+}
+.kitchen-progress span {
+  display: block;
+  height: 100%;
+  border-radius: 10px;
+  background: #f0d294;
+  transition: width 0.4s;
+}
+.kitchen-top .timer-pill {
+  display: none;
+}
+.kitchen-voice-replies {
+  min-height: 56px;
+  padding: 0 20px 0 16px;
+  font-size: 18px;
+  border-color: var(--kitchen-line);
+  flex: none;
+}
+.kitchen-voice-replies:not(.on) {
+  color: var(--kitchen-ink);
+}
+.kitchen-toggle.stop-speaking {
+  border-color: var(--orange);
+  background: var(--orange);
+  color: #fff;
+}
+.kitchen-exit {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 0 22px 0 18px;
+  border-radius: 30px;
+  border: 1px solid var(--kitchen-line);
+  background: #ffffff12;
+  color: inherit;
+  font-size: 19px;
+  font-weight: 600;
+  flex: none;
+}
+.kitchen-exit:hover,
+.kitchen-repeat:hover,
+.kitchen-toggle:hover {
+  background: #ffffff22;
+}
+.kitchen button:focus-visible {
+  outline: 3px solid #f0d294;
+  outline-offset: 4px;
+}
+
+.kitchen-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  gap: 48px;
+  padding: 8px 32px 20px;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: #ffffff40 transparent;
+}
+.kitchen-step {
+  align-self: center;
+  min-width: 0;
+  padding: 8px 0;
+}
+.kitchen-eyebrow {
+  display: block;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #f0d294;
+}
+.kitchen-step.split .kitchen-eyebrow {
+  color: #f2a37c;
+}
+.kitchen-step h2 {
+  font-size: clamp(36px, 4vw, 58px);
+  line-height: 1.1;
+  letter-spacing: -1px;
+  margin: 14px 0 20px;
+}
+.kitchen-instruction {
+  font-size: clamp(28px, 2.55vw, 38px);
+  line-height: 1.4;
+  color: #eef1e6;
+  max-width: 30em;
+}
+.kitchen-note {
+  margin-top: 22px;
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--kitchen-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.kitchen-note span {
+  color: #f0d294;
+  margin-right: 6px;
+}
+
+.kitchen-side {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  align-self: center;
+  min-width: 0;
+}
+.kitchen-side-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--kitchen-muted);
+  margin-bottom: 10px;
+}
+.kitchen-chips {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.kitchen-chip {
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: #ffffff10;
+  border: 1px solid var(--kitchen-line);
+  min-width: 0;
+}
+.kitchen-chip strong {
+  display: block;
+  font-size: 20px;
+  line-height: 1.25;
+}
+.kitchen-chip span {
+  display: block;
+  font-size: 15px;
+  color: var(--kitchen-muted);
+  margin-top: 2px;
+}
+.kitchen-chip.active {
+  background: #f0d294;
+  border-color: #f0d294;
+  color: var(--forest);
+}
+.kitchen-chip.active span {
+  color: #56664d;
+}
+.kitchen-art {
+  width: 130px;
+  height: 130px;
+  opacity: 0.9;
+  align-self: center;
+}
+.kitchen-art svg {
+  width: 100%;
+  height: 100%;
+}
+
+.timer-start.timer-kitchen {
+  width: 100%;
+  min-height: 76px;
+  border-radius: 22px;
+  border: 2px solid #f0d294;
+  background: transparent;
+  color: #f0d294;
+  font-size: 22px;
+  white-space: normal;
+}
+.timer-start.timer-kitchen:hover {
+  background: #f0d29414;
+}
+.timer-panel.timer-kitchen {
+  display: grid;
+  grid-template-columns: 136px minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  padding: 16px;
+  border-radius: 24px;
+  background: #ffffff10;
+  border: 1px solid var(--kitchen-line);
+}
+.timer-panel.timer-kitchen.done {
+  background: #bd603e55;
+  border-color: #f2a37c;
+}
+.timer-ring {
+  position: relative;
+  width: 136px;
+  height: 136px;
+  display: grid;
+  place-items: center;
+}
+.timer-ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.ring-track {
+  fill: none;
+  stroke: #ffffff22;
+  stroke-width: 9;
+}
+.ring-fill {
+  fill: none;
+  stroke: #f0d294;
+  stroke-width: 9;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  transition: stroke-dashoffset 0.25s linear;
+}
+.timer-panel.timer-kitchen .timer-digits {
+  position: relative;
+  font-size: 36px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
+}
+.timer-panel.timer-kitchen .timer-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: 4px;
+  min-width: 0;
+}
+.timer-panel.timer-kitchen .timer-label {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: #f0d294;
+}
+.timer-panel.timer-kitchen .timer-for {
+  font-size: 18px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.timer-cancel {
+  margin-top: 8px;
+  min-height: 44px;
+  border-radius: 22px;
+  border: 1px solid var(--kitchen-line);
+  background: #ffffff14;
+  color: inherit;
+  font-size: 15px;
+}
+
+.kitchen-bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 32px 24px;
+  border-top: 1px solid #ffffff1a;
+  background: #0000001c;
+}
+.kitchen-voice {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+}
+.mic-large {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  border: 2px solid #f0d294;
+  background: #f0d29414;
+  color: #f0d294;
+}
+.mic-large:hover {
+  background: #f0d29426;
+}
+.mic-large.unsupported {
+  border-color: #ffffff40;
+  color: #ffffff80;
+}
+.kitchen-voice-copy {
+  min-width: 0;
+}
+.kitchen-voice-copy strong {
+  display: block;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.kitchen-voice-copy > span {
+  display: block;
+  font-size: 16px;
+  color: var(--kitchen-muted);
+  margin-top: 3px;
+}
+.kitchen-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.kitchen-toggle {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 20px;
+  border: 1px solid var(--kitchen-line);
+  background: #ffffff0d;
+  color: var(--kitchen-ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+.kitchen-toggle.on {
+  background: #f0d294;
+  border-color: #f0d294;
+  color: var(--forest);
+}
+.kitchen-repeat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 84px;
+  padding: 0 26px;
+  border-radius: 24px;
+  border: 1px solid var(--kitchen-line);
+  background: #ffffff12;
+  color: inherit;
+  font-size: 21px;
+  font-weight: 600;
+}
+.kitchen-done {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 92px;
+  min-width: 300px;
+  padding: 0 40px;
+  border: 0;
+  border-radius: 26px;
+  background: #f0d294;
+  color: var(--forest);
+  font-size: 30px;
+  font-weight: 700;
+  box-shadow: 0 12px 30px #0000003a;
+  transition:
+    transform 0.16s,
+    background 0.16s;
+}
+.kitchen-done:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background: #f5dca8;
+}
+.kitchen-done.split {
+  background: var(--orange);
+  color: #fff;
+}
+.kitchen-done.split:hover:not(:disabled) {
+  background: #c96c49;
+}
+html[data-voice='listening'] .mic-button.mic-large {
+  background: var(--orange);
+  border-color: var(--orange);
+  color: #fff;
+}
+html[data-voice='speaking'] .mic-button.mic-large {
+  background: #f0d294;
+  border-color: #f0d294;
+  color: var(--forest);
+}
+html[data-voice='thinking'] .mic-button.mic-large {
+  background: #ffffff1a;
+  border-color: #ffffff40;
+  color: #f0d294;
+}
+html[data-voice='thinking'] .mic-large::after {
+  border-top-color: #f0d294;
+}
+
+@keyframes mic-pulse {
+  0% {
+    box-shadow: 0 0 0 0 #bd603e70;
+  }
+  100% {
+    box-shadow: 0 0 0 14px #bd603e00;
+  }
+}
+@keyframes orb-speak {
+  from {
+    box-shadow: 0 0 0 2px #f0d29440;
+  }
+  to {
+    box-shadow: 0 0 0 8px #f0d29410;
+  }
+}
+@keyframes voice-bar {
+  0%,
+  100% {
+    height: 5px;
+  }
+  50% {
+    height: 16px;
+  }
+}
+@keyframes voice-dot {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes timer-done {
+  from {
+    box-shadow: 0 0 0 0 #bd603e00;
+  }
+  to {
+    box-shadow: 0 0 0 6px #bd603e40;
+  }
+}
+
+/* Desktop sidebar: keep "Cook together" on one line at the larger size */
+@media (min-width: 761px) {
+  .nav-item {
+    font-size: 14px;
+    gap: 10px;
+    padding: 13px 12px;
+  }
+}
+@media (min-width: 761px) and (max-height: 760px) {
+  .kitchen-art {
+    display: none;
+  }
+}
+
+/* Tablets and small laptops */
+@media (max-width: 1060px) {
+  .kitchen-main {
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 32px;
+  }
+  .kitchen-art {
+    display: none;
+  }
+  .kitchen-done {
+    min-width: 240px;
+    padding: 0 28px;
+    font-size: 26px;
+  }
+}
+
+@media (max-width: 760px) {
+  .timer-pill {
+    max-width: 150px;
+    padding: 7px 10px;
+    font-size: 13px;
+  }
+  .topbar-mic {
+    width: 36px;
+    height: 36px;
+  }
+  .session-heading {
+    flex-wrap: wrap;
+  }
+  .session-heading-side {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .kitchen-top {
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    padding: 12px 16px 10px;
+  }
+  .kitchen-heading {
+    flex: 1;
+    min-width: 0;
+  }
+  .kitchen-heading strong {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .kitchen-top .timer-pill {
+    display: flex;
+    max-width: 120px;
+    padding: 8px 12px;
+    border-color: #f0d294;
+    background: #f0d294;
+    color: var(--forest);
+    font-size: 17px;
+  }
+  .kitchen-top .timer-pill.done {
+    background: var(--orange);
+    border-color: var(--orange);
+    color: #fff;
+  }
+  .kitchen-top .timer-pill-label {
+    display: none;
+  }
+  .kitchen-heading .brand-mark {
+    display: none;
+  }
+  .kitchen-heading strong {
+    font-size: 20px;
+  }
+  .kitchen-heading span {
+    font-size: 15px;
+  }
+  .kitchen-progress {
+    order: 3;
+    flex-basis: 100%;
+    height: 8px;
+  }
+  .kitchen-exit {
+    min-height: 48px;
+    padding: 0 16px 0 12px;
+    font-size: 17px;
+  }
+  .kitchen-voice-replies {
+    min-height: 48px;
+    padding: 0 14px 0 12px;
+    font-size: 16px;
+  }
+  .kitchen-main {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: 22px;
+    padding: 10px 16px 20px;
+  }
+  .kitchen-step {
+    align-self: start;
+    padding: 0;
+  }
+  .kitchen-eyebrow {
+    font-size: 14px;
+    letter-spacing: 1.6px;
+  }
+  .kitchen-step h2 {
+    font-size: 30px;
+    letter-spacing: -0.5px;
+    margin: 10px 0 14px;
+  }
+  .kitchen-instruction {
+    font-size: 28px;
+    line-height: 1.38;
+  }
+  .kitchen-note {
+    font-size: 16px;
+  }
+  .kitchen-side {
+    align-self: start;
+    gap: 18px;
+  }
+  .kitchen-chip {
+    padding: 10px 13px;
+  }
+  .kitchen-chip strong {
+    font-size: 18px;
+  }
+  .kitchen-chip span {
+    font-size: 14px;
+  }
+  .timer-panel.timer-kitchen {
+    grid-template-columns: 112px minmax(0, 1fr);
+  }
+  .timer-ring {
+    width: 112px;
+    height: 112px;
+  }
+  .timer-panel.timer-kitchen .timer-digits {
+    font-size: 30px;
+  }
+  .kitchen-bottom {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: 'voice voice' 'repeat done';
+    gap: 12px;
+    padding: 12px 16px calc(14px + env(safe-area-inset-bottom));
+  }
+  .kitchen-voice {
+    grid-area: voice;
+    gap: 14px;
+  }
+  .kitchen-repeat {
+    grid-area: repeat;
+    min-height: 68px;
+    padding: 0 18px;
+    font-size: 18px;
+    border-radius: 20px;
+  }
+  .kitchen-done {
+    grid-area: done;
+    min-width: 0;
+    min-height: 68px;
+    padding: 0 16px;
+    font-size: 24px;
+    border-radius: 22px;
+  }
+  .mic-large {
+    width: 64px;
+    height: 64px;
+  }
+  .mic-large svg {
+    width: 28px;
+    height: 28px;
+  }
+  .kitchen-voice-copy strong {
+    font-size: 16px;
+  }
+  .kitchen-voice-copy > span {
+    display: none;
+  }
+  .kitchen-toggles {
+    margin-top: 6px;
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+  .kitchen-toggle {
+    min-height: 36px;
+    font-size: 13px;
+    padding: 0 10px;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .breadcrumbs {
+    display: none;
+  }
+  .topbar {
+    justify-content: flex-end;
+  }
+  .topbar .timer-pill-label {
+    display: none;
+  }
+  .sidebar-subtitle {
+    display: none;
+  }
+  .nav-item {
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 4px;
+  }
+  .nav-item svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+  .feature-strip {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .timeline-heading {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+  }
+  .feature-item {
+    align-items: center;
+    gap: 10px;
+  }
+  .session-heading-side {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+  .session-heading-side [data-action='cancel-meal'] {
+    flex: 1 1 100%;
+  }
+  .next-step-actions .button {
+    flex: 1 1 100%;
+  }
+  .voice-float {
+    font-size: 14px;
+    padding: 10px 14px;
+  }
+  .kitchen-repeat {
+    padding: 0;
+    width: 72px;
+    justify-content: center;
+  }
+  .kitchen-voice-replies {
+    width: 48px;
+    padding: 0;
+    justify-content: center;
+  }
+  .kitchen-voice-replies span,
+  .kitchen-exit span {
+    display: none;
+  }
+  .kitchen-exit {
+    width: 48px;
+    padding: 0;
+    justify-content: center;
+  }
+  .kitchen-repeat span {
+    display: none;
+  }
+  .kitchen-done {
+    font-size: 22px;
+    gap: 10px;
+    white-space: normal;
+    line-height: 1.15;
+  }
+}

@@ -1,0 +1,7 @@
+node_modules/
+.data/
+work/
+submission/
+package-lock.json
+*.md
+infra/
