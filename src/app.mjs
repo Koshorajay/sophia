@@ -596,6 +596,11 @@ export function createApplication({ store, env = process.env, interpret, bedrock
         { modelId: env.BEDROCK_MODEL_ID, region: env.AWS_REGION, client: bedrockClient },
       );
     } catch (err) {
+      // Real Bedrock failures go to the server log (terminal or CloudWatch) with AWS's own error, never the prompt.
+      if (!interpret && !bedrockClient)
+        console.error(
+          `[sophia] Bedrock request failed: ${err.cause?.name || err.name}: ${err.cause?.message || err.message}`,
+        );
       if (err.status) throw err;
       const e = new Error(
         `Bedrock could not interpret this request. Check model access, region, and the server configuration. ${err.name === 'AccessDeniedException' ? 'AWS denied access to the configured model.' : ''}`,

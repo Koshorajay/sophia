@@ -123,20 +123,27 @@ export function conversation(history = [], message = '') {
   return turns;
 }
 
+/** Turn AWS SDK failures into messages the cook can act on. status 502 lets the app show them as they are. */
 function bedrockError(error) {
+  const failure = message => Object.assign(new Error(message), { status: 502, cause: error });
   if (error.name === 'AccessDeniedException' || error.name === 'UnauthorizedException') {
-    return new Error(
+    return failure(
       'Bedrock access denied. Check model availability in this region and the Lambda role model permission; see docs/AWS_SETUP.md.',
     );
   }
   if (error.name === 'ThrottlingException')
-    return new Error('Bedrock is busy. Wait briefly before trying again; no automatic retry was made.');
+    return failure('Bedrock is busy. Wait briefly before trying again; no automatic retry was made.');
+  // AWS Free plan accounts get "Operation not allowed" for every model until they upgrade to the Paid plan.
+  if (error.name === 'ValidationException' && /operation not allowed/i.test(error.message || ''))
+    return failure(
+      'This AWS account is not allowed to call Bedrock models yet. Accounts on the AWS Free plan must upgrade to the Paid plan first; see docs/AWS_SETUP.md.',
+    );
   if (error.name === 'ValidationException')
-    return new Error(
+    return failure(
       'Bedrock model or inference configuration is unavailable in this region. Check BEDROCK_MODEL_ID and IAM resources.',
     );
   if (error.name === 'TimeoutError' || error.name === 'AbortError')
-    return new Error('Bedrock timed out. Your cooking state was not advanced.');
+    return failure('Bedrock timed out. Your cooking state was not advanced.');
   return error;
 }
 
