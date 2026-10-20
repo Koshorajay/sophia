@@ -136,7 +136,7 @@ function bedrockError(error) {
   // AWS Free plan accounts get "Operation not allowed" for every model until they upgrade to the Paid plan.
   if (error.name === 'ValidationException' && /operation not allowed/i.test(error.message || ''))
     return failure(
-      'This AWS account is not allowed to call Bedrock models yet. Accounts on the AWS Free plan must upgrade to the Paid plan first; see docs/AWS_SETUP.md.',
+      'This AWS account is not allowed to call Bedrock models yet. Upgrade from the AWS Free plan to the Paid plan and add a payment method; see docs/AWS_SETUP.md.',
     );
   if (error.name === 'ValidationException')
     return failure(

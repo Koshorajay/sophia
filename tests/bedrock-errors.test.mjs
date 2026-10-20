@@ -31,7 +31,7 @@ test('an AWS Free plan account gets an actionable message, not a generic failure
   await call('/api/state');
   const failed = await call('/api/chat', { message: 'Plan dal for 3' });
   assert.equal(failed.status, 502);
-  assert.match(failed.json.error, /Free plan must upgrade to the Paid plan/);
+  assert.match(failed.json.error, /upgrade from the AWS Free plan to the Paid plan and add a payment method/i);
 });
 
 test('other AWS errors keep their specific explanations', async () => {
