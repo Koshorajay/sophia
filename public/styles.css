@@ -2415,3 +2415,90 @@ p {
     scroll-behavior: auto !important;
   }
 }
+
+/* Shopping list */
+.shortage-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  flex-wrap: wrap;
+}
+.shortage-notice p {
+  margin: 0;
+  flex: 1 1 260px;
+}
+.shopping-list-card {
+  margin: 20px 0 22px;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+.shopping-list-card h3 {
+  margin: 0 0 4px;
+}
+.shopping-list-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.shopping-items {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+.shopping-items li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.list-item-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.list-item-text strong {
+  font-weight: 600;
+}
+.list-qty {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.list-check {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border: 1.5px solid var(--forest);
+  border-radius: 7px;
+  background: var(--white);
+  color: var(--white);
+}
+.list-check[aria-pressed='true'] {
+  background: var(--forest);
+}
+.list-remove {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+}
+.list-remove:hover {
+  background: var(--sage);
+}
+.shopping-items li.bought .list-item-text strong,
+.shopping-items li.bought .list-qty {
+  color: var(--muted);
+  text-decoration: line-through;
+}

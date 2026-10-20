@@ -12,6 +12,10 @@ import {
   updatePantry,
   forecastGroceries,
   finishLabel,
+  checkPantry,
+  mealShortages,
+  addToShoppingList,
+  updateShoppingList,
 } from './engine.mjs';
 
 const text = (description, maxLength = 120) => ({ type: 'string', maxLength, description });
@@ -66,6 +70,9 @@ export function kitchenSummary(state, { includePantry = false } = {}) {
       : null,
     next: nextInstruction(state),
     confirmedCookedMeals: state.history.length,
+    shoppingList: (state.shoppingList || [])
+      .filter(item => !item.bought)
+      .map(({ name, quantity, unit }) => ({ name, quantity, unit })),
     ...(includePantry
       ? {
           pantry: state.pantry.map(({ id, name, quantity, unit, confirmed }) => ({
@@ -143,6 +150,18 @@ function resolvePantryItem(state, value) {
   if (!item)
     throw new Error(`"${value}" is not a pantry ingredient. Call get_kitchen_state with includePantry for valid ids.`);
   return item;
+}
+
+/** "toor dal (180 g), garlic (9 g)" for replies that are read aloud. */
+export function describeMissing(missing) {
+  return missing.map(item => `${item.name.toLowerCase()} (${item.missing} ${item.unit})`).join(', ');
+}
+
+/** Missing items for a named dish, or for the active meal when no dish is given. */
+function shortagesFor(state, { dishId, servings }) {
+  if (dishId) return checkPantry(state, { dishId: resolveDish(dishId).id, servings });
+  if (state.session?.status === 'cooking') return mealShortages(state);
+  throw new Error('Say which dish to check, for example "dal tadka", or plan a meal first.');
 }
 
 const changed = (next, message, extra = {}) => ({
@@ -417,6 +436,118 @@ const definitions = [
           forecast,
         },
       };
+    },
+  },
+  {
+    name: 'check_pantry',
+    title: 'Check the pantry for a dish',
+    description:
+      'Check whether the entered pantry covers a dish before cooking ("Do I have everything for dal?"). Uses each household member\'s saved preference, or checks the active meal when dishId is omitted. Returns each missing ingredient with how much is needed and how much is entered. Read-only.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        dishId: text('Dish id or name to check. Omit to check the active meal.', 80),
+        servings: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 8,
+          description: 'Number of people. Defaults to the household size.',
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    run(state, { dishId, servings }) {
+      const check = shortagesFor(state, { dishId, servings });
+      const message = check.missing.length
+        ? `For ${check.title}, the entered pantry is short on ${describeMissing(check.missing)}.`
+        : `The entered pantry covers ${check.title}${check.servings ? ` for ${check.servings}` : ''}.`;
+      return { result: { message, ...check } };
+    },
+  },
+  {
+    name: 'add_to_shopping_list',
+    title: 'Add to the shopping list',
+    description:
+      'Add items to the household shopping list. Give items explicitly, or give dishId (or nothing, for the active meal) to add whatever the pantry is missing for it. Amounts round up to simple pack sizes. Nothing is ordered or paid for. Call only when the user asks to add something to their list.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        dishId: text('Add what is missing for this dish. Omit, with no items, to use the active meal.', 80),
+        servings: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 8,
+          description: 'People for dishId. Defaults to the household size.',
+        },
+        items: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 20,
+          description: 'Specific items to add instead of computing what is missing.',
+          items: {
+            type: 'object',
+            required: ['ingredient', 'quantity'],
+            additionalProperties: false,
+            properties: {
+              ingredient: text('Ingredient id or name, such as "toor dal".', 80),
+              quantity: {
+                type: 'number',
+                minimum: 0,
+                maximum: 100000,
+                description: "Amount in the ingredient's unit.",
+              },
+            },
+          },
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    run(state, { dishId, servings, items }) {
+      if (items) {
+        const resolved = items.map(({ ingredient, quantity }) => ({
+          id: resolvePantryItem(state, ingredient).id,
+          quantity,
+        }));
+        const next = addToShoppingList(state, resolved, 'Added by you');
+        return changed(next, next.activity.at(-1).message);
+      }
+      const check = shortagesFor(state, { dishId, servings });
+      if (!check.missing.length)
+        return {
+          result: {
+            message: `Nothing is missing for ${check.title}; the shopping list is unchanged.`,
+            kitchen: kitchenSummary(state),
+          },
+        };
+      const next = addToShoppingList(
+        state,
+        check.missing.map(item => ({ id: item.id, quantity: item.missing })),
+        `For ${check.title}`,
+      );
+      return changed(next, next.activity.at(-1).message);
+    },
+  },
+  {
+    name: 'update_shopping_list',
+    title: 'Update the shopping list',
+    description:
+      'Tick an item off as bought (toggle), remove one item, clear the bought items, or clear the whole list. Clear only when the user asks.',
+    inputSchema: {
+      type: 'object',
+      required: ['op'],
+      properties: {
+        op: text('One of: toggle, remove, clear-bought, clear.', 20),
+        ingredient: text('Ingredient id or name, for toggle and remove.', 80),
+      },
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    run(state, { op, ingredient }) {
+      const id = ingredient ? resolvePantryItem(state, ingredient).id : undefined;
+      const next = updateShoppingList(state, { op, id });
+      return changed(next, next.activity.at(-1).message);
     },
   },
 ];

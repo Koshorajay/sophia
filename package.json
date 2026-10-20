@@ -20,6 +20,7 @@
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.0.0",
     "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/client-polly": "^3.1153.0",
     "@aws-sdk/lib-dynamodb": "^3.0.0",
     "@modelcontextprotocol/sdk": "^1.32.1"
   },

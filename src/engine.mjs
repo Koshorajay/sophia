@@ -420,6 +420,112 @@ export function updatePantry(state, { id, quantity } = {}) {
   return next;
 }
 
+/** What a dish needs that the entered pantry does not cover. Read-only; portions default to saved preferences. */
+export function checkPantry(state, { dishId, servings, portions } = {}) {
+  const count = servings ?? portions?.length ?? Math.max(1, Math.min(8, state.household.length || 1));
+  const selected = normalizedPortions(state, dishId, count, portions);
+  const needed = ingredientsFor(dishId, selected);
+  const missing = needed.flatMap(item => {
+    const have = state.pantry.find(stock => stock.id === item.id)?.quantity || 0;
+    return have < item.quantity
+      ? [
+          {
+            id: item.id,
+            name: item.name,
+            unit: item.unit,
+            needed: item.quantity,
+            have,
+            missing: round(item.quantity - have),
+          },
+        ]
+      : [];
+  });
+  const title = catalog.find(dish => dish.id === dishId).name;
+  return { dishId, title, servings: count, portions: selected, ingredientCount: needed.length, missing };
+}
+
+/** The active meal's shortages, as shopping-list items. */
+export function mealShortages(state) {
+  const session = cooking(state);
+  const current = clone(state);
+  refreshPantryEstimate(current);
+  return {
+    title: session.title,
+    missing: current.session.shortages.map(item => ({
+      id: item.id,
+      name: item.name,
+      unit: item.unit,
+      needed: item.quantity,
+      have: item.availableQuantity,
+      missing: item.missingQuantity,
+    })),
+  };
+}
+
+/** Add items to the shopping list. Amounts round up to simple pack steps; an item already on the list keeps the larger amount. */
+export function addToShoppingList(state, items, reason = 'Added by you') {
+  if (!Array.isArray(items) || !items.length) throw new Error('There is nothing to add to the shopping list.');
+  if (items.length > 60) throw new Error('Add at most 60 items at once.');
+  const next = change(state);
+  next.shoppingList = [...(next.shoppingList || [])];
+  const added = [];
+  for (const { id, quantity } of items) {
+    const stock = next.pantry.find(item => item.id === id);
+    if (!stock) throw new Error('Choose an existing pantry ingredient for the shopping list.');
+    if (typeof quantity !== 'number' || !Number.isFinite(quantity) || quantity <= 0 || quantity > 100000)
+      throw new Error(`Enter an amount of ${stock.name} between 0 and 100,000.`);
+    const amount = purchaseQuantity(quantity, stock.unit);
+    const index = next.shoppingList.findIndex(entry => entry.id === id && !entry.bought);
+    if (index >= 0) {
+      const existing = next.shoppingList[index];
+      next.shoppingList[index] = {
+        ...existing,
+        quantity: Math.max(existing.quantity, amount),
+        reason,
+        updatedAt: timestamp(next),
+      };
+    } else {
+      next.shoppingList.push({
+        id,
+        name: stock.name,
+        unit: stock.unit,
+        quantity: amount,
+        reason,
+        bought: false,
+        addedAt: timestamp(next),
+      });
+    }
+    added.push(`${stock.name} (${amount} ${stock.unit})`);
+  }
+  if (next.shoppingList.length > 100) throw new Error('The shopping list is full. Clear bought items first.');
+  activity(next, 'shopping', `Added to the shopping list: ${added.join(', ')}.`);
+  return next;
+}
+
+/** Tick an item as bought, remove it, or clear the list. Nothing is ever ordered. */
+export function updateShoppingList(state, { op, id } = {}) {
+  const list = state.shoppingList || [];
+  if (!['toggle', 'remove', 'clear-bought', 'clear'].includes(op))
+    throw new Error('Choose toggle, remove, clear-bought or clear.');
+  const target = ['toggle', 'remove'].includes(op) ? list.find(entry => entry.id === id) : null;
+  if (['toggle', 'remove'].includes(op) && !target) throw new Error('That item is not on the shopping list.');
+  const next = change(state);
+  if (op === 'toggle') {
+    next.shoppingList = list.map(entry => (entry === target ? { ...entry, bought: !entry.bought } : entry));
+    activity(next, 'shopping', `${target.bought ? 'Unticked' : 'Ticked off'} ${target.name}.`);
+  } else if (op === 'remove') {
+    next.shoppingList = list.filter(entry => entry !== target);
+    activity(next, 'shopping', `Removed ${target.name} from the shopping list.`);
+  } else if (op === 'clear-bought') {
+    next.shoppingList = list.filter(entry => !entry.bought);
+    activity(next, 'shopping', 'Cleared bought items from the shopping list.');
+  } else {
+    next.shoppingList = [];
+    activity(next, 'shopping', 'Cleared the shopping list.');
+  }
+  return next;
+}
+
 function purchaseQuantity(quantity, unit) {
   const increment = unit === 'item' ? 1 : unit === 'ml' ? 10 : 5;
   return round(Math.ceil(Math.max(0, quantity) / increment) * increment);

@@ -14,6 +14,8 @@ Sophia's kitchen is an **MCP server** (spec 2025-11-25, Streamable HTTP), the op
 - **Splits at the right moment.** "Dal for the three of us, Ravi likes it spicy." Sophia cooks one pot of dal, splits it, and gives only Ravi's bowl a red chilli tadka.
 - **Knows what's already in the pot.** "Actually, no chilli for Ravi" works until his tadka happens. "Remove the onion" after the onion is cooked is refused, with the reason. The AI can't talk its way around this: every action goes through a deterministic kitchen engine.
 - **Hands-free kitchen mode.** Big-type steps, voice control ("next", "repeat", "start the timer") and step timers.
+- **Talks back.** Turn on Voice replies and Sophia reads every answer and each new step aloud: with the Amazon Polly neural voice Kajal (Indian English) when deployed, or the browser's own voice locally.
+- **Checks the pantry before you start.** "Do I have everything for dal?" lists what's short, and "add them to my shopping list" saves it. Nothing is ever ordered or paid for.
 - **Remembers across sessions.** Household preferences, the meal in progress ("where was I?") and every meal you confirm cooking.
 - **Groceries from what you actually cooked.** Monthly staples and weekly fresh items come only from meals you confirmed cooking, never from recipes you merely asked about, and each line says why it's there.
 
@@ -27,7 +29,8 @@ Sophia's kitchen is an **MCP server** (spec 2025-11-25, Streamable HTTP), the op
                  +-----------> Sophia MCP tools <-----------------+
                                search_recipes, plan_meal, get_kitchen_state,
                                complete_current_step, alter_portion, finish_meal,
-                               cancel_meal, update_pantry, forecast_groceries
+                               cancel_meal, update_pantry, forecast_groceries,
+                               check_pantry, add_to_shopping_list, update_shopping_list
                                          |
                               Kitchen engine (src/engine.mjs)
                               the only code that changes state
@@ -58,8 +61,10 @@ Without AWS credentials, the chat uses a small offline keyword parser ("Cook dal
 
 ```sh
 aws login --profile sophia --region us-east-1
-AWS_PROFILE=sophia AWS_REGION=us-east-1 SOPHIA_PROVIDER=bedrock BEDROCK_MODEL_ID=amazon.nova-lite-v1:0 npm start
+AWS_PROFILE=sophia AWS_REGION=us-east-1 SOPHIA_PROVIDER=bedrock BEDROCK_MODEL_ID=amazon.nova-lite-v1:0 SOPHIA_VOICE=polly npm start
 ```
+
+`SOPHIA_VOICE=polly` makes spoken replies use Amazon Polly's Kajal voice; leave it out to use the browser's voice.
 
 ## Use Sophia from any MCP client
 
@@ -74,6 +79,8 @@ AWS_PROFILE=sophia AWS_REGION=us-east-1 SOPHIA_PROVIDER=bedrock BEDROCK_MODEL_ID
 | `alter_portion` | Switch one person's finish or omit an ingredient that has not been added yet |
 | `finish_meal` / `cancel_meal` | Record the meal as cooked once, or abandon it without recording anything |
 | `update_pantry` / `forecast_groceries` | Set confirmed stock; estimate groceries from confirmed cooked meals |
+| `check_pantry` | What a dish (or the active meal) needs beyond the entered stock |
+| `add_to_shopping_list` / `update_shopping_list` | Save what's missing to the household list; tick off, remove or clear items. Nothing is ordered |
 
 Most clients take a URL plus optional headers:
 
@@ -95,7 +102,7 @@ Each MCP session gets its own demo household. To cook in the same household as t
 
 ## Deploy on AWS
 
-One CloudFormation stack: CloudFront + private S3 for the app, API Gateway + Lambda for the API and MCP endpoint, DynamoDB for households, Bedrock for the agent, least-privilege IAM. See [docs/AWS_SETUP.md](docs/AWS_SETUP.md).
+One CloudFormation stack: CloudFront + private S3 for the app, API Gateway + Lambda for the API and MCP endpoint, DynamoDB for households, Bedrock for the agent, Polly for spoken replies, least-privilege IAM. See [docs/AWS_SETUP.md](docs/AWS_SETUP.md).
 
 ## Recipes
 

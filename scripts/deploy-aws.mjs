@@ -21,12 +21,14 @@ const stack = flags.get('stack') || 'sophia-demo';
 const model = flags.get('model') || 'amazon.nova-micro-v1:0';
 const dailyCalls = Number(flags.get('daily-calls') || 200);
 const concurrency = Number(flags.get('concurrency') || 2);
+const voice = flags.get('voice') || 'polly';
 if (!region || !/^[a-z]{2}(?:-[a-z]+)+-\d$/.test(region))
   throw new Error('Choose a supported AWS region explicitly with --region.');
 if (!/^[a-z][a-z0-9-]{0,23}$/.test(stack))
   throw new Error('Use a lowercase stack name of 1–24 letters, numbers, or hyphens, starting with a letter.');
 if (!Number.isInteger(dailyCalls) || dailyCalls < 1 || dailyCalls > 1000)
   throw new Error('--daily-calls must be 1..1000.');
+if (!['polly', 'browser'].includes(voice)) throw new Error('--voice must be polly or browser.');
 if (!Number.isInteger(concurrency) || concurrency < -1 || concurrency > 5)
   throw new Error('--concurrency must be -1..5 (-1 reserves none).');
 const common = ['--region', region, '--no-cli-pager'];
@@ -147,6 +149,7 @@ async function main() {
       ['BedrockModelId', model],
       ['MaxDailyModelCalls', String(dailyCalls)],
       ['ReservedConcurrency', String(concurrency)],
+      ['SpokenReplies', voice],
     ].map(([ParameterKey, ParameterValue]) => ({ ParameterKey, ParameterValue })),
   };
   aws(['cloudformation', 'create-change-set', '--cli-input-json', 'file:///dev/stdin'], input);

@@ -25,6 +25,9 @@ const TOOLS = [
   'cancel_meal',
   'update_pantry',
   'forecast_groceries',
+  'check_pantry',
+  'add_to_shopping_list',
+  'update_shopping_list',
 ];
 
 /** Run the real server.mjs on a free port with its own temporary data directory. */

@@ -24,6 +24,7 @@ export async function packageLambda(output = join(root, 'work', 'lambda.zip')) {
     '@aws-sdk/client-bedrock-runtime',
     '@aws-sdk/client-dynamodb',
     '@aws-sdk/lib-dynamodb',
+    '@aws-sdk/client-polly',
     '@modelcontextprotocol/sdk',
   ]) {
     if (!pkg.dependencies?.[name])

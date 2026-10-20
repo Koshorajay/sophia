@@ -42,11 +42,12 @@ function validateSave(id, state, expectedRevision) {
   }
 }
 function validateQuota(key, limit) {
+  // Model calls use the date as the key; spoken replies use "speech:<date>".
+  const day = typeof key === 'string' ? key.replace(/^speech:/, '') : '';
   if (
-    typeof key !== 'string' ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(key) ||
-    !Number.isFinite(Date.parse(`${key}T00:00:00.000Z`)) ||
-    new Date(`${key}T00:00:00.000Z`).toISOString().slice(0, 10) !== key
+    !/^\d{4}-\d{2}-\d{2}$/.test(day) ||
+    !Number.isFinite(Date.parse(`${day}T00:00:00.000Z`)) ||
+    new Date(`${day}T00:00:00.000Z`).toISOString().slice(0, 10) !== day
   ) {
     throw new TypeError('A valid UTC calendar date is required for the model quota.');
   }

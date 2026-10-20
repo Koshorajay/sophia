@@ -23,6 +23,7 @@ for (const name of [
   '@aws-sdk/client-bedrock-runtime',
   '@aws-sdk/client-dynamodb',
   '@aws-sdk/lib-dynamodb',
+  '@aws-sdk/client-polly',
   '@modelcontextprotocol/sdk',
 ]) {
   // The MCP SDK publishes only subpath exports.

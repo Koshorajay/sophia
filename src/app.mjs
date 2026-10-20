@@ -17,15 +17,18 @@ import {
   recordRequest,
   forecastGroceries,
   finishLabel,
+  checkPantry,
+  mealShortages,
+  updateShoppingList,
 } from './engine.mjs';
 import { FileStore, DynamoStore } from './store.mjs';
-import { kitchenTools, runKitchenTool, nextInstruction } from './tools.mjs';
+import { kitchenTools, runKitchenTool, nextInstruction, describeMissing } from './tools.mjs';
 import { createMcpHandler } from './mcp.mjs';
 
 const VERSION = '0.1.0';
 const MAX_MESSAGE_LENGTH = 1500;
 const CONVERSATION_MEMORY = 10;
-const LIMIT_ACTIONS = new Set(['plan', 'next', 'finish', 'forecast', 'alter', 'cancel', 'help']);
+const LIMIT_ACTIONS = new Set(['plan', 'next', 'finish', 'forecast', 'alter', 'cancel', 'check', 'shop', 'help']);
 // The chat response keeps the action names the web client already understands.
 const TOOL_ACTIONS = {
   plan_meal: 'plan',
@@ -35,6 +38,9 @@ const TOOL_ACTIONS = {
   cancel_meal: 'cancel',
   update_pantry: 'pantry',
   forecast_groceries: 'forecast',
+  check_pantry: 'check',
+  add_to_shopping_list: 'shop',
+  update_shopping_list: 'shop',
 };
 const NUMBER_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
 const STRICT_SYNONYMS = { 'without-cheese': ['no cheese'] };
@@ -78,7 +84,7 @@ function variantsMentioned(dish, message, { loose = false } = {}) {
   return [...new Map(specific.map(m => [m.id, m])).values()];
 }
 
-export function createApplication({ store, env = process.env, interpret, bedrockClient } = {}) {
+export function createApplication({ store, env = process.env, interpret, bedrockClient, synthesizeSpeech } = {}) {
   store ||= env.SOPHIA_TABLE ? new DynamoStore(env.SOPHIA_TABLE) : new FileStore(env.SOPHIA_DATA_DIR || '.data');
   const providerMode = env.SOPHIA_PROVIDER === 'bedrock' ? 'bedrock' : 'demo';
   const code = env.SOPHIA_ACCESS_CODE || '';
@@ -89,7 +95,29 @@ export function createApplication({ store, env = process.env, interpret, bedrock
     label: providerMode === 'bedrock' ? 'Amazon Bedrock' : 'Local demo',
     cloud: Boolean(env.SOPHIA_TABLE),
     model: providerMode === 'bedrock' ? env.BEDROCK_MODEL_ID || 'amazon.nova-micro-v1:0' : null,
+    // Spoken replies: Amazon Polly when enabled, otherwise the browser's own voice.
+    speech: env.SOPHIA_VOICE === 'polly' ? 'polly' : 'browser',
+    ...(env.SOPHIA_VOICE === 'polly' ? { voice: env.SOPHIA_POLLY_VOICE || 'Kajal' } : {}),
   };
+  let pollyClient;
+  /** Amazon Polly neural text-to-speech; returns MP3 bytes. */
+  async function pollySpeech(text) {
+    const sdk = await import('@aws-sdk/client-polly');
+    pollyClient ||= new sdk.PollyClient({ region: env.AWS_REGION, maxAttempts: 2 });
+    const result = await pollyClient.send(
+      new sdk.SynthesizeSpeechCommand({
+        Engine: 'neural',
+        VoiceId: provider.voice,
+        // Kajal is bilingual; ask for her Indian English rather than Hindi.
+        ...(provider.voice === 'Kajal' ? { LanguageCode: 'en-IN' } : {}),
+        OutputFormat: 'mp3',
+        TextType: 'text',
+        Text: text,
+      }),
+      { abortSignal: AbortSignal.timeout(8000) },
+    );
+    return Buffer.from(await result.AudioStream.transformToByteArray());
+  }
   const verifyAccessCode = value =>
     !code || (typeof value === 'string' && timingSafeEqual(digest(value), digest(code)));
   function sessionCookie(id, secure) {
@@ -237,6 +265,35 @@ export function createApplication({ store, env = process.env, interpret, bedrock
         reply:
           'Sophia’s demo handles taste preferences, not allergy-safe preparation. For an allergy, plan separate ingredients and equipment from the start; splitting a shared dish later does not undo cross-contact.',
       };
+    const listWords = /\b(?:shopping list|grocery list|my list|the list|to list)\b/;
+    if (
+      /\b(?:add|put|save)\b/.test(t) &&
+      (listWords.test(t) || /\badd (?:them|those|these|it|what'?s missing|the missing (?:items|things))\b/.test(t))
+    ) {
+      const dishId = matchRecipes(t)[0]?.id || (cooking ? undefined : state.lastPantryCheck?.dishId);
+      if (!dishId && !cooking)
+        return { action: 'help', reply: 'Which dish is it for? Try “Do I have everything for dal?” first.' };
+      return { action: 'shop', arguments: dishId ? { dishId } : {} };
+    }
+    if (/\b(?:what'?s|what is|read|show|tell me)\b/.test(t) && listWords.test(t)) {
+      const items = (state.shoppingList || []).filter(item => !item.bought);
+      return {
+        action: 'help',
+        reply: items.length
+          ? `Your shopping list: ${items.map(item => `${item.name.toLowerCase()} (${item.quantity} ${item.unit})`).join(', ')}.`
+          : 'Your shopping list is empty.',
+      };
+    }
+    if (
+      /\b(?:do|have) (?:i|we) (?:have|got) (?:everything|enough|all|the ingredients|what (?:i|we) need)\b|\bwhat (?:am i|are we|is) missing\b|\bwhat (?:do|else do) (?:i|we) need\b|\bcheck (?:my |the )?pantry\b/.test(
+        t,
+      )
+    ) {
+      const dishId = matchRecipes(t)[0]?.id;
+      if (!dishId && !cooking)
+        return { action: 'help', reply: 'Which dish should I check? For example, “Do I have everything for dal?”' };
+      return { action: 'check', arguments: dishId ? { dishId } : {} };
+    }
     const cancel = t
       .trim()
       .replace(/[.!?]+$/, '')
@@ -455,6 +512,24 @@ export function createApplication({ store, env = process.env, interpret, bedrock
         next = cancelMeal(requested);
         reply = `${next.activity.at(-1).message} ${nextInstruction(next)}`;
         break;
+      case 'check': {
+        const check = args.dishId ? checkPantry(requested, { dishId: args.dishId }) : mealShortages(requested);
+        next = {
+          ...requested,
+          lastPantryCheck: { dishId: args.dishId || requested.session.dishId, title: check.title },
+        };
+        const people = check.servings ? ` for ${check.servings}` : '';
+        reply = check.missing.length
+          ? `For ${check.title}${people}, you're short on ${describeMissing(check.missing)}, based on your pantry. Say “add them to my shopping list” to save them.`
+          : `Yes, your pantry covers ${check.title}${people}.`;
+        break;
+      }
+      case 'shop': {
+        const outcome = runKitchenTool('add_to_shopping_list', requested, args);
+        if (outcome.state) next = outcome.state;
+        reply = `${outcome.result.message} Nothing is ordered; it's a list for your next shop.`;
+        break;
+      }
       case 'forecast':
         forecast = forecastGroceries(requested, { weeks: 4, awayDays: args.awayDays || 0, confirmPantry: false });
         reply = `I based this suggestion on ${forecast.historyCount} confirmed cooked meals, not recipe requests. Staples cover the next four weeks; fresh items are weekly suggestions. Confirm pantry stock in Grocery plan before subtracting what you own.`;
@@ -620,6 +695,27 @@ export function createApplication({ store, env = process.env, interpret, bedrock
       return json(401, { error: 'Enter the demo access code to open Sophia.', code: 'access_required' });
     const id = existingId || randomUUID();
     const cookie = !existingId ? { 'set-cookie': sessionCookie(id, secure) } : {};
+    if (path === '/api/speak' && method === 'POST') {
+      if (provider.speech !== 'polly')
+        return json(404, { error: 'Spoken replies use the browser voice here.' }, cookie);
+      const text = typeof body.text === 'string' ? body.text.trim() : '';
+      if (!text || text.length > MAX_MESSAGE_LENGTH)
+        return json(400, { error: `Send 1-${MAX_MESSAGE_LENGTH} characters to speak.` }, cookie);
+      try {
+        const limit = Number(env.SOPHIA_MAX_DAILY_SPEECH || 300);
+        const today = new Date().toISOString().slice(0, 10);
+        if (!(await durable('check', () => store.consumeQuota(`speech:${today}`, limit))))
+          return json(429, { error: 'Today’s Polly voice limit is reached; the browser voice will be used.' }, cookie);
+        const audio = await (synthesizeSpeech || pollySpeech)(text);
+        return json(200, { audio: Buffer.from(audio).toString('base64'), contentType: 'audio/mpeg' }, cookie);
+      } catch (err) {
+        return json(
+          err.status === 503 ? 503 : 502,
+          { error: 'Amazon Polly could not speak this reply; the browser voice will be used.' },
+          cookie,
+        );
+      }
+    }
     try {
       return await household(id, async (state, save) => {
         // householdId lets an MCP client work on this same household.
@@ -646,6 +742,15 @@ export function createApplication({ store, env = process.env, interpret, bedrock
           case '/api/alter':
             state = alterMeal(state, body);
             break;
+          case '/api/shopping-list': {
+            if (body.op === 'add-shortages') {
+              const outcome = runKitchenTool('add_to_shopping_list', state, {});
+              more.reply = outcome.result.message;
+              if (!outcome.state) return json(200, envelope(state, more), cookie);
+              state = outcome.state;
+            } else state = updateShoppingList(state, { op: body.op, id: body.id });
+            break;
+          }
           case '/api/pantry':
             state = updatePantry(state, body);
             break;

@@ -351,7 +351,7 @@ function activeSession(session) {
     <div class="portion-lanes">${session.portions.map(p => `<div class="portion-lane">${icon('bowl', 20)}<h4>${esc(p.name)}'s plate</h4><p>${esc(variantLabel(session.dishId, p.variant))}</p></div>`).join('')}</div>
     ${session.recipeNote ? `<p class="notice">${esc(session.recipeNote)}</p>` : ''}
     <details class="ingredients-details"><summary>What you'll use <span>${session.ingredients?.length || 0} ingredients for ${session.servings} portions</span></summary><div class="ingredient-grid">${(session.ingredients || []).map(item => `<div><span>${esc(item.name)}</span><strong>${number(item.quantity)} ${esc(item.unit)}</strong></div>`).join('')}</div><p class="small muted">Quantities cover every portion.</p></details>
-    ${session.shortages?.length ? `<p class="notice warm">Short on ${session.shortages.map(item => `${esc(item.name)} (${number(item.missingQuantity)} ${esc(item.unit)})`).join(', ')}.</p>` : ''}
+    ${session.shortages?.length ? `<div class="notice warm shortage-notice"><p>Short on ${session.shortages.map(item => `${esc(item.name)} (${number(item.missingQuantity)} ${esc(item.unit)})`).join(', ')}.</p><button class="button button-outline button-small" data-action="list-add-shortages" ${ui.busy ? 'disabled' : ''}>${icon('bag', 14)} Add to shopping list</button></div>` : ''}
     ${next ? `<section class="next-step-card"><span class="eyebrow">${isSplit ? 'The moment to split' : 'Your next step'}</span><h3>${esc(next.title)}</h3><p>${esc(next.instruction)}</p><div class="next-step-actions"><button class="button ${isSplit ? 'button-orange' : 'button-primary'}" data-action="complete-step" data-step="${esc(next.id)}" data-split="${isSplit}" ${ui.busy ? 'disabled' : ''}>${icon(isSplit ? 'split' : 'check', 15)} ${ui.busy ? 'Saving…' : isSplit ? 'I have separated the portions' : 'Done — next step'}</button>${ui.timer ? '' : timerControls(next, 'card')}</div>${ui.timer ? timerControls(next, 'card') : ''}</section>` : `<section class="next-step-card"><span class="eyebrow">Ready to serve</span><h3>Everyone's plate is ready.</h3><p>Confirm the meal to update your pantry and history.</p><button class="button button-primary" data-action="finish" ${ui.busy ? 'disabled' : ''}>${icon('check', 15)} Confirm meal cooked</button>${ui.timer ? timerControls(null, 'card') : ''}</section>`}
     <section class="timeline"><div class="timeline-heading"><h3>Your cooking path</h3><span class="small muted">Shared → separate → serve</span></div>${steps.map((step, i) => `<div class="step-row ${step.status === 'completed' ? 'completed' : next?.id === step.id ? 'current' : ''}"><span class="step-number">${step.status === 'completed' ? icon('check', 12) : i + 1}</span><div><h4>${esc(step.title)}${step.portion ? ` <span class="muted">· ${esc(step.portion)}</span>` : ''}</h4><p>${esc(step.instruction)}</p><span class="step-phase">${step.phase === 'split' ? 'Separate portions' : step.phase === 'shared' ? 'Shared preparation' : 'Personal finish'}</span></div><span class="step-time">${step.durationMinutes ? `${esc(step.durationMinutes)} min` : ''}</span></div>`).join('')}</section>
     <form class="alter-card" id="alter-form"><h3>Change of plans?</h3><p>Leave an ingredient out for everyone or for one plate.</p><div class="inline-form"><div class="field"><label for="omit-ingredient">Leave out</label><select id="omit-ingredient" name="omitIngredient" required>${(session.ingredients || []).map(ingredient => `<option value="${esc(ingredient.id)}">${esc(ingredient.name)}</option>`).join('')}</select></div><div class="field"><label for="alter-portion">For whom?</label><select id="alter-portion" name="portionName"><option value="">Everyone</option>${session.portions.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('')}</select></div><button class="button button-outline" type="submit" ${ui.busy ? 'disabled' : ''}>Check this change</button></div><p class="notice warm">Preferences and allergies are different. Separating food later cannot remove an allergen or undo cross-contact.</p></form>
@@ -384,9 +384,25 @@ function groceriesView() {
   const count = cookedHistory().length;
   return `${welcome('Next month, a little easier.', 'A useful shopping plan starts with what you actually cooked.', 'From your kitchen, with context')}
     <div class="hero-card" style="min-height:202px"><div class="hero-copy"><span class="eyebrow">Habits, not guesses</span><h2>Your meals.<br>Your grocery rhythm.</h2><p>Staples for the month. Fresh ingredients for each week. Every suggestion has a reason.</p></div><div class="hero-art" style="top:0;opacity:.7">${foodArt('wraps', true)}</div></div>
+    ${shoppingListView()}
     <form class="forecast-form" id="forecast-form"><h3>Build a four-week grocery plan</h3><p>${count ? `Based on ${count} cooked meals${ui.state.demo?.enabled ? ', including sample meals' : ''}.` : 'Cook and confirm your first meal to start your history.'}</p><div class="inline-form"><div class="field"><label for="away-days">Days away in the next four weeks</label><input type="number" id="away-days" name="awayDays" min="0" max="28" value="${ui.awayDays}" required></div><div class="field"><label for="forecast-period">Planning period</label><select id="forecast-period" disabled><option>4 weeks · 28 days</option></select></div></div><label class="checkbox-label"><input type="checkbox" name="confirmPantry" ${ui.confirmPantry ? 'checked' : ''}><span>Subtract what's already in my pantry</span></label><button class="button button-primary" type="submit" ${ui.busy ? 'disabled' : ''}>${icon('bag', 14)} ${ui.busy ? 'Planning…' : 'Suggest my groceries'}</button></form>
     ${ui.forecast ? forecastResults(ui.forecast) : `<div class="empty-state">${icon('bag', 27)}<h3>A list with a reason.</h3><p>Monthly staples and a fresh list for each week.</p></div>`}
     ${savedShoppingView()}`;
+}
+
+/** The household's running shopping list: what to buy, why, and ticks for what's bought. Nothing is ordered. */
+function shoppingListView() {
+  const list = ui.state.shoppingList || [];
+  const busy = ui.busy ? 'disabled' : '';
+  if (!list.length)
+    return `<section class="shopping-list-card" aria-label="Shopping list"><h3>Your shopping list</h3><p class="small muted">Empty for now. Ask Sophia “Do I have everything for dal?”, or tap “Add to shopping list” when a meal is short on something.</p></section>`;
+  const open = list.filter(item => !item.bought).length;
+  return `<section class="shopping-list-card" aria-label="Shopping list"><div class="shopping-list-head"><div><h3>Your shopping list</h3><p class="small muted">${open} to buy${list.length > open ? ` · ${list.length - open} bought` : ''} · nothing is ordered</p></div>${list.length > open ? `<button class="button button-quiet button-small" data-action="list-clear-bought" ${busy}>Clear bought</button>` : ''}</div><ul class="shopping-items">${list
+    .map(
+      item =>
+        `<li class="${item.bought ? 'bought' : ''}"><button class="list-check" data-action="list-toggle" data-id="${esc(item.id)}" aria-pressed="${item.bought}" aria-label="${item.bought ? 'Untick' : 'Tick off'} ${esc(item.name)}" ${busy}>${item.bought ? icon('check', 14) : ''}</button><div class="list-item-text"><strong>${esc(item.name)}</strong><span class="small muted">${esc(item.reason || '')}</span></div><span class="list-qty">${number(item.quantity)} ${esc(item.unit)}</span><button class="list-remove" data-action="list-remove" data-id="${esc(item.id)}" aria-label="Remove ${esc(item.name)}" ${busy}>${icon('close', 14)}</button></li>`,
+    )
+    .join('')}</ul></section>`;
 }
 
 function groceryRows(items) {
@@ -1406,6 +1422,15 @@ app.addEventListener('click', async event => {
   if (action === 'reset') document.querySelector('#reset-dialog').showModal();
   if (action === 'clear-history') document.querySelector('#history-dialog').showModal();
   if (action === 'cancel-meal') document.querySelector('#cancel-dialog').showModal();
+  if (action === 'list-add-shortages') {
+    const result = await mutate('/api/shopping-list', { op: 'add-shortages' });
+    if (result?.reply) toast(result.reply);
+  }
+  if (action === 'list-toggle') await mutate('/api/shopping-list', { op: 'toggle', id: button.dataset.id });
+  if (action === 'list-remove')
+    await mutate('/api/shopping-list', { op: 'remove', id: button.dataset.id }, 'Removed from your shopping list.');
+  if (action === 'list-clear-bought')
+    await mutate('/api/shopping-list', { op: 'clear-bought' }, 'Cleared the bought items.');
   if (action === 'complete-step') {
     const done = await mutate(
       '/api/step',

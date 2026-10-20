@@ -24,6 +24,11 @@ Parameters:
     MinValue: 1
     MaxValue: 1000
     Description: Global per-day model-call ceiling in application code, not a total AWS spending cap.
+  SpokenReplies:
+    Type: String
+    Default: polly
+    AllowedValues: [polly, browser]
+    Description: polly speaks replies with the Amazon Polly neural voice Kajal (Indian English); browser uses the viewer's own browser voice.
   ReservedConcurrency:
     Type: Number
     Default: 2
@@ -89,6 +94,10 @@ Resources:
               - Effect: Allow
                 Action: bedrock:InvokeModel
                 Resource: !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${BedrockModelId}'
+              # SynthesizeSpeech has no voice-level resource; '*' only covers lexicons, which Sophia does not use.
+              - Effect: Allow
+                Action: polly:SynthesizeSpeech
+                Resource: '*'
   ApiFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -112,6 +121,7 @@ Resources:
           SOPHIA_TABLE: !Ref SessionTable
           SOPHIA_ACCESS_CODE: !Ref AccessCode
           SOPHIA_MAX_DAILY_CALLS: !Ref MaxDailyModelCalls
+          SOPHIA_VOICE: !Ref SpokenReplies
           NODE_ENV: production
       Tags:
         - Key: Project
