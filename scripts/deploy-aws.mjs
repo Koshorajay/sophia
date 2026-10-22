@@ -97,10 +97,14 @@ async function secret(prompt) {
           return;
         }
         if (ch === '\u007f' || ch === '\b') {
+          if (value) process.stdout.write('\b \b');
           value = value.slice(0, -1);
           continue;
         }
-        if (ch >= ' ') value += ch;
+        if (ch >= ' ') {
+          value += ch;
+          process.stdout.write('*'); // show progress without revealing the code
+        }
       }
     };
     process.stdin.on('data', onData);
@@ -116,7 +120,7 @@ async function main() {
   const account = json(aws(['sts', 'get-caller-identity'])).Account;
   if (!/^\d{12}$/.test(account)) throw new Error('AWS account identity unavailable.');
   console.log(`Authenticated account ending ${account.slice(-4)}; region ${region}.`);
-  const accessCode = await secret('Demo access code (12–128 characters, hidden; share privately with judges): ');
+  const accessCode = await secret('Demo access code (12–128 characters, shown as *; then press Enter): ');
   if (accessCode.length < 12 || accessCode.length > 128) throw new Error('Access code must contain 12–128 characters.');
   const zip = await packageLambda();
   const bytes = await readFile(zip);
