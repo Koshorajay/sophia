@@ -49,3 +49,36 @@ test('deployed access gate cannot be bypassed by a public state call', async () 
   const cookies = [unlocked.cookies[0].split(';')[0]];
   assert.equal((await handler(event('GET', '/api/state', undefined, cookies))).statusCode, 200);
 });
+
+test('without CloudFront, Lambda serves the web app files and keeps API routes separate', async () => {
+  const { createLambdaHandler } = await import('../lambda.mjs');
+  const { createApplication } = await import('../src/app.mjs');
+  const { MemoryStore } = await import('../src/store.mjs');
+  const handler = createLambdaHandler(
+    createApplication({ store: new MemoryStore(), env: { SOPHIA_PROVIDER: 'demo' } }),
+  );
+  const event = path => ({
+    rawPath: path,
+    requestContext: { http: { method: 'GET', sourceIp: '1.2.3.4' } },
+    headers: { host: 'x' },
+  });
+
+  const page = await handler(event('/'));
+  assert.equal(page.statusCode, 200);
+  assert.equal(page.isBase64Encoded, true);
+  assert.match(page.headers['content-type'], /text\/html/);
+  assert.match(Buffer.from(page.body, 'base64').toString('utf8'), /<div id="app">/);
+  assert.match(page.headers['content-security-policy'], /default-src 'self'/);
+
+  const script = await handler(event('/app.js'));
+  assert.equal(script.statusCode, 200);
+  assert.match(script.headers['cache-control'], /max-age=300/);
+
+  assert.equal((await handler(event('/../package.json'))).statusCode, 403);
+  assert.equal((await handler(event('/%2e%2e/package.json'))).statusCode, 403);
+  assert.equal((await handler(event('/missing.css'))).statusCode, 404);
+
+  const api = await handler(event('/api/state'));
+  assert.equal(api.statusCode, 200);
+  assert.ok(JSON.parse(api.body).state);
+});

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export async function packageLambda(output = join(root, 'work', 'lambda.zip')) {
   const stage = await mkdtemp(join(tmpdir(), 'sophia-lambda-'));
-  for (const name of ['lambda.mjs', 'src', 'package.json', 'package-lock.json']) {
+  for (const name of ['lambda.mjs', 'src', 'public', 'package.json', 'package-lock.json']) {
     try {
       await cp(join(root, name), join(stage, name), { recursive: true });
     } catch (error) {

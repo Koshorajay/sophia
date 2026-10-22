@@ -73,6 +73,8 @@ New AWS accounts often have a Lambda limit of 10 concurrent executions and canno
 - **`ValidationException: Operation not allowed`** on every Bedrock call, and `aws bedrock get-foundation-model-availability --model-id amazon.nova-lite-v1:0` shows `"authorizationStatus": "NOT_AUTHORIZED"`: check `aws freetier get-account-plan-state`. Accounts on the AWS **Free plan** can't call Bedrock models; upgrade to the Paid plan in the console (remaining Free plan credits carry over) **and** make sure Billing → Payment preferences has a payment method; without one, Bedrock stays blocked even on the Paid plan. Polly, Lambda, DynamoDB, S3 and CloudFront work on either plan.
 - Sophia writes the underlying AWS error to the server log (the terminal locally, CloudWatch when deployed) as `[sophia] Bedrock request failed: ...`.
 
+- **`Your account must be verified before you can add new CloudFront resources`**: deploy with `--cloudfront no`. The Lambda function then serves the web app itself through API Gateway, and the printed site URL is the API Gateway address. Ask AWS Support to verify the account to use CloudFront later.
+
 ## Check the deployment
 
 1. Open the site URL and unlock with your access code. A visitor without it cannot reach the API.

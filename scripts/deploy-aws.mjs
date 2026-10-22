@@ -27,6 +27,7 @@ if (!/^amazon\.[a-z0-9.:-]+$/.test(model))
 const dailyCalls = Number(flags.get('daily-calls') || 200);
 const concurrency = Number(flags.get('concurrency') || 2);
 const voice = flags.get('voice') || 'polly';
+const cloudfront = flags.get('cloudfront') || 'yes';
 if (!region || !/^[a-z]{2}(?:-[a-z]+)+-\d$/.test(region))
   throw new Error('Choose a supported AWS region explicitly with --region.');
 if (!/^[a-z][a-z0-9-]{0,23}$/.test(stack))
@@ -34,6 +35,7 @@ if (!/^[a-z][a-z0-9-]{0,23}$/.test(stack))
 if (!Number.isInteger(dailyCalls) || dailyCalls < 1 || dailyCalls > 1000)
   throw new Error('--daily-calls must be 1..1000.');
 if (!['polly', 'browser'].includes(voice)) throw new Error('--voice must be polly or browser.');
+if (!['yes', 'no'].includes(cloudfront)) throw new Error('--cloudfront must be yes or no.');
 if (!Number.isInteger(concurrency) || concurrency < -1 || concurrency > 5)
   throw new Error('--concurrency must be -1..5 (-1 reserves none).');
 const common = ['--region', region, '--no-cli-pager'];
@@ -168,6 +170,7 @@ async function main() {
       ['MaxDailyModelCalls', String(dailyCalls)],
       ['ReservedConcurrency', String(concurrency)],
       ['SpokenReplies', voice],
+      ['UseCloudFront', cloudfront],
     ].map(([ParameterKey, ParameterValue]) => ({ ParameterKey, ParameterValue })),
   };
   aws(['cloudformation', 'create-change-set', '--cli-input-json', 'file:///dev/stdin'], input);
@@ -194,7 +197,11 @@ async function main() {
     return;
   }
   aws(['cloudformation', 'execute-change-set', '--stack-name', stack, '--change-set-name', changeSetName]);
-  console.log('Waiting for AWS resources; CloudFront can take several minutes.');
+  console.log(
+    cloudfront === 'yes'
+      ? 'Waiting for AWS resources; CloudFront can take several minutes.'
+      : 'Waiting for AWS resources (a few minutes).',
+  );
   aws([
     'cloudformation',
     'wait',
@@ -204,18 +211,21 @@ async function main() {
   ]);
   const deployed = json(aws(['cloudformation', 'describe-stacks', '--stack-name', stack])).Stacks?.[0];
   const outputs = Object.fromEntries((deployed?.Outputs || []).map(item => [item.OutputKey, item.OutputValue]));
-  if (!outputs.SiteBucket || !outputs.DistributionId)
-    throw new Error('Stack completed but frontend outputs were not found.');
-  aws([
-    's3',
-    'sync',
-    join(root, 'public'),
-    `s3://${outputs.SiteBucket}`,
-    '--cache-control',
-    'public,max-age=300',
-    '--only-show-errors',
-  ]);
-  aws(['cloudfront', 'create-invalidation', '--distribution-id', outputs.DistributionId, '--paths', '/*']);
+  if (cloudfront === 'yes') {
+    if (!outputs.SiteBucket || !outputs.DistributionId)
+      throw new Error('Stack completed but frontend outputs were not found.');
+    aws([
+      's3',
+      'sync',
+      join(root, 'public'),
+      `s3://${outputs.SiteBucket}`,
+      '--cache-control',
+      'public,max-age=300',
+      '--only-show-errors',
+    ]);
+    aws(['cloudfront', 'create-invalidation', '--distribution-id', outputs.DistributionId, '--paths', '/*']);
+  }
+  // With --cloudfront no, the Lambda function serves the web app itself; nothing to upload.
   console.log(`Sophia: ${outputs.SiteUrl}`);
   console.log(`MCP endpoint: ${outputs.McpUrl} (send Authorization: Bearer <access code>)`);
   console.log(`Deployment bucket (outside stack): ${bucket}`);

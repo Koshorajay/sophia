@@ -26,6 +26,11 @@ Parameters:
     MinValue: 1
     MaxValue: 1000
     Description: Global per-day model-call ceiling in application code, not a total AWS spending cap.
+  UseCloudFront:
+    Type: String
+    Default: 'yes'
+    AllowedValues: ['yes', 'no']
+    Description: yes serves the web app from private S3 through CloudFront; no serves it from the Lambda function through API Gateway (for accounts that cannot create CloudFront resources yet).
   SpokenReplies:
     Type: String
     Default: polly
@@ -38,6 +43,8 @@ Parameters:
     MaxValue: 5
     Description: Lambda reserved concurrency. -1 reserves none (needed on new accounts with a 10-execution limit); 0 disables API compute.
 Conditions:
+  WithCloudFront: !Equals [!Ref UseCloudFront, 'yes']
+  WithoutCloudFront: !Equals [!Ref UseCloudFront, 'no']
   ReserveConcurrency: !Not [!Equals [!Ref ReservedConcurrency, '-1']]
 
 Resources:
@@ -158,6 +165,22 @@ Resources:
       RouteKey: 'ANY /api'
       AuthorizationType: NONE
       Target: !Sub 'integrations/${ApiIntegration}'
+  SiteRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Condition: WithoutCloudFront
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: $default
+      AuthorizationType: NONE
+      Target: !Sub 'integrations/${ApiIntegration}'
+  SitePermission:
+    Type: AWS::Lambda::Permission
+    Condition: WithoutCloudFront
+    Properties:
+      FunctionName: !Ref ApiFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/$default'
   ApiStage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:
@@ -165,8 +188,9 @@ Resources:
       StageName: '$default'
       AutoDeploy: true
       DefaultRouteSettings:
-        ThrottlingBurstLimit: 5
-        ThrottlingRateLimit: 2
+        # Without CloudFront, each page load also fetches the app's files through the API.
+        ThrottlingBurstLimit: !If [WithCloudFront, 5, 30]
+        ThrottlingRateLimit: !If [WithCloudFront, 2, 10]
         DetailedMetricsEnabled: false
       AccessLogSettings:
         DestinationArn: !GetAtt ApiLogGroup.Arn
@@ -180,6 +204,7 @@ Resources:
       SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*/api*'
   SiteBucket:
     Type: AWS::S3::Bucket
+    Condition: WithCloudFront
     Properties:
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -198,6 +223,7 @@ Resources:
           Value: Sophia
   OriginAccessControl:
     Type: AWS::CloudFront::OriginAccessControl
+    Condition: WithCloudFront
     Properties:
       OriginAccessControlConfig:
         Name: !Sub '${AWS::StackName}-${AWS::Region}-oac'
@@ -206,6 +232,7 @@ Resources:
         SigningProtocol: sigv4
   ApiOriginRequestPolicy:
     Type: AWS::CloudFront::OriginRequestPolicy
+    Condition: WithCloudFront
     Properties:
       OriginRequestPolicyConfig:
         Name: !Sub '${AWS::StackName}-${AWS::Region}-api'
@@ -227,6 +254,7 @@ Resources:
             - Mcp-Protocol-Version
   ViewerHostFunction:
     Type: AWS::CloudFront::Function
+    Condition: WithCloudFront
     Properties:
       Name: !Sub '${AWS::StackName}-${AWS::Region}-host'
       AutoPublish: true
@@ -241,6 +269,7 @@ Resources:
         }
   Distribution:
     Type: AWS::CloudFront::Distribution
+    Condition: WithCloudFront
     Properties:
       DistributionConfig:
         Enabled: true
@@ -287,6 +316,7 @@ Resources:
           Value: Sophia
   SiteBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    Condition: WithCloudFront
     Properties:
       Bucket: !Ref SiteBucket
       PolicyDocument:
@@ -314,10 +344,15 @@ Resources:
 Outputs:
   SiteUrl:
     Description: HTTPS URL. Unlock using the private access code.
-    Value: !Sub 'https://${Distribution.DomainName}'
+    Value: !If
+      - WithCloudFront
+      - !Sub 'https://${Distribution.DomainName}'
+      - !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}'
   SiteBucket:
+    Condition: WithCloudFront
     Value: !Ref SiteBucket
   DistributionId:
+    Condition: WithCloudFront
     Value: !Ref Distribution
   FunctionName:
     Value: !Ref ApiFunction
