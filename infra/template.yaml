@@ -15,9 +15,11 @@ Parameters:
     Description: Shared demo access code; provide privately to judges. Never embed in browser assets.
   BedrockModelId:
     Type: String
-    Default: amazon.nova-micro-v1:0
-    AllowedPattern: '[a-zA-Z0-9.:-]+'
-    Description: A directly invocable regional foundation-model ID. Confirm model availability first.
+    Default: amazon.nova-lite-v1:0
+    # Amazon's own models only: third-party models are billed through AWS Marketplace, which promotional credits may not cover.
+    AllowedPattern: 'amazon\.[a-z0-9.:-]+'
+    ConstraintDescription: Use an Amazon model such as amazon.nova-lite-v1:0. Third-party models may be billed outside AWS credits.
+    Description: A directly invocable Amazon foundation-model ID. Confirm model availability first.
   MaxDailyModelCalls:
     Type: Number
     Default: 200

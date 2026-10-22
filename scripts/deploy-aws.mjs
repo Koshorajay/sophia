@@ -18,7 +18,10 @@ for (let i = 2; i < process.argv.length; i += 2) {
 }
 const region = flags.get('region');
 const stack = flags.get('stack') || 'sophia-demo';
-const model = flags.get('model') || 'amazon.nova-micro-v1:0';
+const model = flags.get('model') || 'amazon.nova-lite-v1:0';
+// Third-party Bedrock models are billed through AWS Marketplace, which promotional credits may not cover.
+if (!/^amazon\.[a-z0-9.:-]+$/.test(model))
+  throw new Error('--model must be an Amazon model such as amazon.nova-lite-v1:0, so usage stays within AWS credits.');
 const dailyCalls = Number(flags.get('daily-calls') || 200);
 const concurrency = Number(flags.get('concurrency') || 2);
 const voice = flags.get('voice') || 'polly';
