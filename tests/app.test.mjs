@@ -299,19 +299,21 @@ test('running out of quota during a tool loop discards the partial change', asyn
   assert.equal(after.json.state.revision, before.json.state.revision);
 });
 
-test('model failure is visible and never falls back to pretending AWS ran', async () => {
+test('model failure falls back to the offline parser and says so; it never pretends AWS ran', async () => {
   const { call } = harness({
     env: { SOPHIA_PROVIDER: 'bedrock' },
     interpret: async () => {
       throw new Error('upstream unavailable');
     },
   });
-  const before = await call('/api/state');
-  const failed = await call('/api/chat', { message: 'Cook pasta' });
-  assert.equal(failed.status, 502);
-  const after = await call('/api/state');
-  assert.equal(after.json.state.revision, before.json.state.revision);
-  assert.equal(after.json.state.session, null);
+  await call('/api/state');
+  const answered = await call('/api/chat', { message: 'Cook pasta for 2' });
+  assert.equal(answered.status, 200);
+  assert.equal(answered.json.fallback, 'offline');
+  assert.match(answered.json.reply, /^AWS AI is unavailable right now, so I used offline mode\./);
+  assert.ok(!answered.json.usage && !answered.json.toolCalls, 'no model usage is reported');
+  assert.equal(answered.json.state.session.dishId, 'pasta');
+  assert.match(answered.json.state.conversation.at(-1).content, /offline mode/);
 });
 
 test('Bedrock agent cannot run unknown tools, smuggle arguments, or confirm two steps at once', async () => {
