@@ -270,10 +270,14 @@ export function createApplication({ store, env = process.env, interpret, bedrock
       /\b(?:add|put|save)\b/.test(t) &&
       (listWords.test(t) || /\badd (?:them|those|these|it|what'?s missing|the missing (?:items|things))\b/.test(t))
     ) {
-      const dishId = matchRecipes(t)[0]?.id || (cooking ? undefined : state.lastPantryCheck?.dishId);
-      if (!dishId && !cooking)
-        return { action: 'help', reply: 'Which dish is it for? Try “Do I have everything for dal?” first.' };
-      return { action: 'shop', arguments: dishId ? { dishId } : {} };
+      // "Add them" means the dish just checked; otherwise the meal being cooked.
+      const named = matchRecipes(t)[0]?.id;
+      const check = state.lastPantryCheck;
+      const recent = check && Date.now() - Date.parse(check.at || 0) < 15 * 60 * 1000;
+      if (named) return { action: 'shop', arguments: { dishId: named } };
+      if (recent && !check.meal) return { action: 'shop', arguments: { dishId: check.dishId } };
+      if (cooking) return { action: 'shop', arguments: {} };
+      return { action: 'help', reply: 'Which dish is it for? Try “Do I have everything for dal?” first.' };
     }
     if (/\b(?:what'?s|what is|read|show|tell me)\b/.test(t) && listWords.test(t)) {
       const items = (state.shoppingList || []).filter(item => !item.bought);
@@ -516,7 +520,12 @@ export function createApplication({ store, env = process.env, interpret, bedrock
         const check = args.dishId ? checkPantry(requested, { dishId: args.dishId }) : mealShortages(requested);
         next = {
           ...requested,
-          lastPantryCheck: { dishId: args.dishId || requested.session.dishId, title: check.title },
+          lastPantryCheck: {
+            dishId: args.dishId || requested.session.dishId,
+            title: check.title,
+            meal: !args.dishId,
+            at: new Date().toISOString(),
+          },
         };
         const people = check.servings ? ` for ${check.servings}` : '';
         reply = check.missing.length

@@ -180,3 +180,22 @@ test('Polly voice: off by default, speaks with a daily limit when on, and report
   assert.equal(failed.status, 502);
   assert.match(failed.json.error, /browser voice will be used/);
 });
+
+test('"add them" after checking another dish adds that dish, even while a meal is cooking', async () => {
+  const call = harness();
+  await call('/api/state');
+  await call('/api/chat', { message: 'Make dal for 3' });
+  const check = await call('/api/chat', { message: 'Do I have everything for palak paneer?' });
+  assert.equal(check.json.action, 'check');
+  const add = await call('/api/chat', { message: 'add them to my shopping list' });
+  assert.ok(
+    add.json.state.shoppingList.every(item => item.reason === 'For Palak paneer'),
+    add.json.reply,
+  );
+  assert.ok(add.json.state.shoppingList.some(item => item.id === 'paneer'));
+
+  // Asking about the meal being cooked, then "add them", uses that meal's actual portions.
+  await call('/api/chat', { message: 'what am I missing?' });
+  const meal = await call('/api/chat', { message: 'add them to my list' });
+  assert.ok(meal.json.state.shoppingList.some(item => item.reason === 'For Dal tadka'));
+});
