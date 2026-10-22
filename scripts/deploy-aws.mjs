@@ -25,7 +25,8 @@ const model = flags.get('model') || 'amazon.nova-lite-v1:0';
 if (!/^amazon\.[a-z0-9.:-]+$/.test(model))
   throw new Error('--model must be an Amazon model such as amazon.nova-lite-v1:0, so usage stays within AWS credits.');
 const dailyCalls = Number(flags.get('daily-calls') || 200);
-const concurrency = Number(flags.get('concurrency') || 2);
+// -1 reserves no Lambda capacity: new accounts (10 concurrent executions) cannot reserve any.
+const concurrency = Number(flags.get('concurrency') ?? -1);
 const voice = flags.get('voice') || 'polly';
 const cloudfront = flags.get('cloudfront') || 'yes';
 if (!region || !/^[a-z]{2}(?:-[a-z]+)+-\d$/.test(region))

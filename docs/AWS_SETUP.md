@@ -34,7 +34,7 @@ Everything is defined in [`infra/template.yaml`](../infra/template.yaml). There 
 
 - A shared demo access code (12–128 characters) gates the hosted app; the browser gets a signed HttpOnly cookie. MCP clients send the same code as a Bearer token.
 - The Lambda role can only write its own log group, read/write its own table, invoke the one configured Bedrock model, and call Polly's SynthesizeSpeech.
-- Daily model-call quota (default 200), a separate daily Polly limit (default 300 replies), API throttling (2 requests/second, burst 5), reserved concurrency 2, short timeouts, capped output tokens.
+- Daily model-call quota (default 200), a separate daily Polly limit (default 300 replies), API throttling (2 requests/second, burst 5; 10/30 when Lambda serves the app), optional reserved concurrency (`--concurrency 1`–`5` on accounts that allow it), short timeouts, capped output tokens.
 - To stop all compute immediately: Lambda → the Sophia function → Configuration → Concurrency → set reserved concurrency to 0.
 
 These limit exposure but are not a hard spending cap. Set an AWS Budgets alert before deploying.
@@ -66,7 +66,7 @@ Prerequisites: Node.js 22+, npm, `zip`, [AWS CLI v2](https://docs.aws.amazon.com
 
    The script checks your identity, asks for the demo access code (hidden input), packages the Lambda ZIP, creates a CloudFormation change set, shows you the resource changes and waits until you type `deploy`. It then uploads `public/`, refreshes CloudFront and prints the site URL and the MCP endpoint.
 
-New AWS accounts often have a Lambda limit of 10 concurrent executions and cannot reserve any of it. If the deploy fails on reserved concurrency, run it again with `--concurrency -1` (no reservation; API Gateway throttling and the daily model quota still apply).
+New AWS accounts often have a Lambda limit of 10 concurrent executions and cannot reserve any of it, so by default the deploy reserves none (`--concurrency -1`). API Gateway throttling and the daily model and voice limits still apply.
 
 ## Troubleshooting
 

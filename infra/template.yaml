@@ -38,7 +38,7 @@ Parameters:
     Description: polly speaks replies with the Amazon Polly neural voice Kajal (Indian English); browser uses the viewer's own browser voice.
   ReservedConcurrency:
     Type: Number
-    Default: 2
+    Default: -1
     MinValue: -1
     MaxValue: 5
     Description: Lambda reserved concurrency. -1 reserves none (needed on new accounts with a 10-execution limit); 0 disables API compute.
