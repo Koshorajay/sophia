@@ -19,6 +19,9 @@ for (let i = 2; i < process.argv.length; i += 2) {
   flags.set(process.argv[i].slice(2), process.argv[i + 1]);
 }
 const region = flags.get('region');
+// --confirm yes skips both prompts (for scripted runs); the access code then comes from SOPHIA_DEPLOY_ACCESS_CODE,
+// never from command-line arguments, which other processes can see.
+const unattended = flags.get('confirm') === 'yes';
 const stack = flags.get('stack') || 'sophia-demo';
 const model = flags.get('model') || 'amazon.nova-lite-v1:0';
 // Third-party Bedrock models are billed through AWS Marketplace, which promotional credits may not cover.
@@ -119,11 +122,14 @@ async function main() {
     `Preparing AWS deployment for ${stack} in ${region}. This script creates billable resources after confirmation.`,
   );
   console.log('First check Billing credits/expiry and your budget alerts. Read docs/AWS_SETUP.md.');
-  if ((await question('Continue preparing a deployment? Type yes: ')).trim() !== 'yes') return;
+  if (!unattended && (await question('Continue preparing a deployment? Type yes: ')).trim() !== 'yes') return;
   const account = json(aws(['sts', 'get-caller-identity'])).Account;
   if (!/^\d{12}$/.test(account)) throw new Error('AWS account identity unavailable.');
   console.log(`Authenticated account ending ${account.slice(-4)}; region ${region}.`);
-  const accessCode = await secret('Demo access code (12–128 characters, shown as *; then press Enter): ');
+  const accessCode =
+    unattended && process.env.SOPHIA_DEPLOY_ACCESS_CODE
+      ? process.env.SOPHIA_DEPLOY_ACCESS_CODE
+      : await secret('Demo access code (12–128 characters, shown as *; then press Enter): ');
   if (accessCode.length < 12 || accessCode.length > 128) throw new Error('Access code must contain 12–128 characters.');
   const zip = await packageLambda();
   const bytes = await readFile(zip);
@@ -193,7 +199,10 @@ async function main() {
     );
   }
   console.log(`Inspect in AWS Console → CloudFormation → ${stack} → Change sets → ${changeSetName}.`);
-  if ((await question('Execute this change set and publish the site? Type deploy: ')).trim() !== 'deploy') {
+  if (
+    !unattended &&
+    (await question('Execute this change set and publish the site? Type deploy: ')).trim() !== 'deploy'
+  ) {
     console.log('Stopped before execution. The change set and private deployment ZIP remain for review.');
     return;
   }
