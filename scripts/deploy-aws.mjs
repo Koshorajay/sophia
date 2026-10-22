@@ -2,6 +2,8 @@
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline/promises';
@@ -38,15 +40,24 @@ const common = ['--region', region, '--no-cli-pager'];
 if (flags.has('profile')) common.push('--profile', flags.get('profile'));
 
 function aws(args, input, allowFailure = false) {
-  // No shell expansion. Secrets are sent only over stdin, never in process args or files.
-  const result = spawnSync('aws', [...args, ...common], {
-    encoding: 'utf8',
-    input: input === undefined ? undefined : JSON.stringify(input),
-    maxBuffer: 8 * 1024 * 1024,
-  });
-  if (result.error) throw new Error(`AWS CLI unavailable: ${result.error.message}`);
-  if (result.status !== 0 && !allowFailure) throw new Error(result.stderr?.trim() || 'AWS operation failed.');
-  return result;
+  // No shell expansion. Input JSON (which can hold the access code) goes in a private 0600 file that is
+  // deleted straight after the call, never in process arguments. Node's child stdin is a socket, which
+  // the AWS CLI cannot open as file:///dev/stdin.
+  let dir;
+  if (input !== undefined) {
+    dir = mkdtempSync(join(tmpdir(), 'sophia-deploy-'));
+    const file = join(dir, 'input.json');
+    writeFileSync(file, JSON.stringify(input), { mode: 0o600 });
+    args = args.map(arg => (arg === 'file:///dev/stdin' ? `file://${file}` : arg));
+  }
+  try {
+    const result = spawnSync('aws', [...args, ...common], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+    if (result.error) throw new Error(`AWS CLI unavailable: ${result.error.message}`);
+    if (result.status !== 0 && !allowFailure) throw new Error(result.stderr?.trim() || 'AWS operation failed.');
+    return result;
+  } finally {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+  }
 }
 function json(result) {
   return JSON.parse(result.stdout || '{}');
