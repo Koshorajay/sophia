@@ -53,3 +53,10 @@ test('other AWS errors fall back too and keep their specific explanations', asyn
     assert.match(answered.json.fallbackReason, expected, name);
   }
 });
+
+test('after Bedrock fails, every page load reports it offline so the badge is right before the first message', async () => {
+  const call = harness({ name: 'ValidationException', message: 'Operation not allowed' });
+  assert.equal((await call('/api/state')).json.provider.bedrockOffline, undefined);
+  await call('/api/chat', { message: 'Plan dal for 3' });
+  assert.equal((await call('/api/state')).json.provider.bedrockOffline, true);
+});

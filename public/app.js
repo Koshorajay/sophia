@@ -669,10 +669,14 @@ function render() {
 }
 
 /** Which brain answered: Bedrock, the labelled offline fallback while Bedrock is unavailable, or the local demo. */
+/** The server saw Bedrock fail recently, so the chat answers offline unless Gemini is on. */
+function bedrockKnownOffline() {
+  return Boolean(ui.provider?.bedrockOffline) && !(ui.useGemini && ui.provider?.gemini);
+}
 function providerBadge() {
   if (ui.useGemini && ui.provider?.gemini && !ui.offlineFallback)
     return `<span class="provider-badge gemini" title="Google Gemini understands your words; Sophia's kitchen engine still decides what's allowed.">Gemini AI</span>`;
-  if ((ui.provider.mode === 'bedrock' || ui.useGemini) && ui.offlineFallback)
+  if ((ui.provider.mode === 'bedrock' || ui.useGemini) && (ui.offlineFallback || bedrockKnownOffline()))
     return `<span class="provider-badge offline" title="AWS Bedrock isn't available for this account right now, so replies use Sophia's offline parser. It switches back automatically.">Offline mode</span>`;
   return `<span class="provider-badge" title="${esc(ui.provider.label)}">${ui.provider.mode === 'bedrock' ? 'AWS Bedrock' : 'Demo mode'}</span>`;
 }
@@ -695,9 +699,10 @@ async function sendChat(message, { spoken = false, heard = '' } = {}) {
       message,
       ...(ui.useGemini && ui.provider?.gemini ? { engine: 'gemini' } : {}),
     });
+    const wasOffline = ui.offlineFallback || bedrockKnownOffline();
     applyEnvelope(result);
     const offline = result.fallback === 'offline';
-    if (offline && !ui.offlineFallback)
+    if (offline && !wasOffline)
       toast('AWS AI is unavailable right now, so Sophia is using offline mode. The badge shows when this changes.');
     ui.offlineFallback = offline;
     if (result.forecast) {
@@ -733,15 +738,21 @@ function scrollChat() {
 
 /* Voice: push-to-talk or hands-free input through the Web Speech API. Recognised text goes to
    /api/chat exactly like a typed message; replies are read aloud with speechSynthesis. */
-const speechRecognition = () => window.SpeechRecognition || window.webkitSpeechRecognition;
+// Chromium-based browsers other than Chrome and Edge (Chromium itself, Brave, Vivaldi, Opera) expose speech
+// recognition but can't reach Google's speech service, so every attempt fails. Treat them as unsupported.
+const brands = (navigator.userAgentData?.brands || []).map(item => item.brand);
+const speechBlocked =
+  brands.includes('Chromium') && !brands.some(brand => brand === 'Google Chrome' || brand === 'Microsoft Edge');
+const speechRecognition = () => (speechBlocked ? null : window.SpeechRecognition || window.webkitSpeechRecognition);
 const voiceLang = /^en\b/i.test(navigator.language || '') ? navigator.language : 'en-US';
 const VOICE_UNSUPPORTED =
-  'Voice input isn’t available in this browser. Use Chrome, Edge or Safari to talk to Sophia, or type instead.';
+  'Voice input isn’t available in this browser. Use Google Chrome, Edge or Safari to talk to Sophia, or type instead.';
 const VOICE_ERRORS = {
   'not-allowed': 'Microphone access is blocked. Allow the microphone for this site in your browser, then try again.',
   'service-not-allowed': 'This browser won’t run speech recognition on this page. Try Chrome, or type instead.',
   'audio-capture': 'No microphone was found. Check that one is connected, or type instead.',
-  network: 'Speech recognition couldn’t reach the browser’s speech service. Check your connection, or type instead.',
+  network:
+    'Voice input couldn’t reach Google’s speech service, which it needs. It works in Google Chrome, Edge or Safari; or type instead.',
   'language-not-supported': 'Speech recognition doesn’t support this language here. Type instead.',
 };
 const voice = {

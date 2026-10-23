@@ -147,6 +147,10 @@ export function createApplication({
     gemini: Boolean(env.GEMINI_API_KEY),
     ...(env.SOPHIA_VOICE === 'polly' ? { voice: env.SOPHIA_POLLY_VOICE || 'Kajal' } : {}),
   };
+  // When Bedrock last failed and the offline parser answered. The app shows "Offline mode" from page load
+  // while this is recent, instead of claiming Bedrock until the first message fails.
+  let bedrockFailedAt = 0;
+  const bedrockOffline = () => providerMode === 'bedrock' && Date.now() - bedrockFailedAt < 30 * 60_000;
   let pollyClient;
   /** Amazon Polly neural text-to-speech; returns MP3 bytes. */
   async function pollySpeech(text) {
@@ -198,7 +202,13 @@ export function createApplication({
       if (locks.get(id) === work) locks.delete(id);
     }
   }
-  const envelope = (state, more = {}) => ({ state, catalog, tastes: TASTES, provider, ...more });
+  const envelope = (state, more = {}) => ({
+    state,
+    catalog,
+    tastes: TASTES,
+    provider: bedrockOffline() ? { ...provider, bedrockOffline: true } : provider,
+    ...more,
+  });
   const json = (status, value, headers = {}) => ({
     status,
     headers: {
@@ -741,11 +751,13 @@ export function createApplication({
     else {
       try {
         result = await agentChat(requested, message, gemini ? 'gemini' : 'bedrock');
+        if (!gemini) bedrockFailedAt = 0;
       } catch (err) {
         // When the model can't answer (account not enabled, outage, timeout), keep cooking with the offline
         // parser. The response is flagged so the app can show an "Offline mode" badge; replies stay clean
         // because they are read aloud. Storage (503) errors, and Bedrock's daily limit (429), stay errors.
         if (err.status !== 502 && !(gemini && err.status === 429)) throw err;
+        if (!gemini) bedrockFailedAt = Date.now();
         const offline = demoChat(requested, message);
         result = {
           ...offline,
