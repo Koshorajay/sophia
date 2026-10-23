@@ -42,6 +42,8 @@ const TOOL_ACTIONS = {
   add_to_shopping_list: 'shop',
   update_shopping_list: 'shop',
 };
+const QUICK_COMMAND =
+  /^(?:next|next step|done|ok done|step done|this step is done|complete (?:this |the )?step|confirm split|split done|what(?:'s| is) next\??|where was i\??)[.!]?$/;
 const NUMBER_WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
 const STRICT_SYNONYMS = { 'without-cheese': ['no cheese'] };
 const LOOSE_SYNONYMS = {
@@ -84,7 +86,15 @@ function variantsMentioned(dish, message, { loose = false } = {}) {
   return [...new Map(specific.map(m => [m.id, m])).values()];
 }
 
-export function createApplication({ store, env = process.env, interpret, bedrockClient, synthesizeSpeech } = {}) {
+export function createApplication({
+  store,
+  env = process.env,
+  interpret,
+  bedrockClient,
+  synthesizeSpeech,
+  geminiAgent,
+  geminiFetch,
+} = {}) {
   store ||= env.SOPHIA_TABLE ? new DynamoStore(env.SOPHIA_TABLE) : new FileStore(env.SOPHIA_DATA_DIR || '.data');
   const providerMode = env.SOPHIA_PROVIDER === 'bedrock' ? 'bedrock' : 'demo';
   const code = env.SOPHIA_ACCESS_CODE || '';
@@ -97,6 +107,8 @@ export function createApplication({ store, env = process.env, interpret, bedrock
     model: providerMode === 'bedrock' ? env.BEDROCK_MODEL_ID || 'amazon.nova-micro-v1:0' : null,
     // Spoken replies: Amazon Polly when enabled, otherwise the browser's own voice.
     speech: env.SOPHIA_VOICE === 'polly' ? 'polly' : 'browser',
+    // An optional Google Gemini agent the cook can switch on in the chat while Bedrock is unavailable.
+    gemini: Boolean(env.GEMINI_API_KEY),
     ...(env.SOPHIA_VOICE === 'polly' ? { voice: env.SOPHIA_POLLY_VOICE || 'Kajal' } : {}),
   };
   let pollyClient;
@@ -549,15 +561,18 @@ export function createApplication({ store, env = process.env, interpret, bedrock
     return { state: next, reply, ...(forecast ? { forecast } : {}), action: intent.action };
   }
 
-  async function agentChat(requested, message) {
-    const limit = Number(env.SOPHIA_MAX_DAILY_CALLS || 100);
+  async function agentChat(requested, message, engine = 'bedrock') {
+    const gemini = engine === 'gemini';
+    const name = gemini ? 'Gemini' : 'Bedrock';
+    const limit = Number((gemini ? env.SOPHIA_MAX_DAILY_GEMINI : env.SOPHIA_MAX_DAILY_CALLS) || (gemini ? 150 : 100));
     if (!Number.isInteger(limit) || limit < 1 || limit > 10000)
-      throw new Error('SOPHIA_MAX_DAILY_CALLS must be 1-10000.');
-    // Every Bedrock call, including each tool round, counts toward the daily quota and is reserved before it is made.
+      throw new Error('Daily model-call limits must be 1-10000.');
+    // Every model call, including each tool round, counts toward that engine's daily quota and is reserved first.
     const reserve = async () => {
-      if (!(await durable('check', () => store.consumeQuota(new Date().toISOString().slice(0, 10), limit)))) {
+      const day = new Date().toISOString().slice(0, 10);
+      if (!(await durable('check', () => store.consumeQuota(gemini ? `gemini:${day}` : day, limit)))) {
         const e = new Error(
-          'Today’s Bedrock call limit is reached. Cooking buttons and history still work. Try again tomorrow or adjust the limit in AWS.',
+          `Today’s ${name} limit is reached. Cooking buttons and history still work. Try again tomorrow.`,
         );
         e.status = 429;
         throw e;
@@ -586,7 +601,9 @@ export function createApplication({ store, env = process.env, interpret, bedrock
     };
     let answer;
     try {
-      const agent = interpret || (await import('./bedrock.mjs')).runBedrockAgent;
+      const agent = gemini
+        ? geminiAgent || (await import('./gemini.mjs')).runGeminiAgent
+        : interpret || (await import('./bedrock.mjs')).runBedrockAgent;
       answer = await agent(
         message,
         {
@@ -602,13 +619,15 @@ export function createApplication({ store, env = process.env, interpret, bedrock
             await reserve();
           },
         },
-        { modelId: env.BEDROCK_MODEL_ID, region: env.AWS_REGION, client: bedrockClient },
+        gemini
+          ? { apiKey: env.GEMINI_API_KEY, model: env.GEMINI_MODEL, fetch: geminiFetch }
+          : { modelId: env.BEDROCK_MODEL_ID, region: env.AWS_REGION, client: bedrockClient },
       );
     } catch (err) {
       // Real Bedrock failures go to the server log (terminal or CloudWatch) with AWS's own error, never the prompt.
-      if (!interpret && !bedrockClient)
+      if (gemini ? !geminiAgent && !geminiFetch : !interpret && !bedrockClient)
         console.error(
-          `[sophia] Bedrock request failed: ${err.cause?.name || err.name}: ${err.cause?.message || err.message}`,
+          `[sophia] ${name} request failed: ${err.cause?.name || err.name}: ${err.cause?.message || err.message}`,
         );
       if (err.status) throw err;
       const e = new Error(
@@ -624,21 +643,26 @@ export function createApplication({ store, env = process.env, interpret, bedrock
       ...(forecast ? { forecast } : {}),
       ...(answer?.usage ? { usage: answer.usage } : {}),
       ...(answer?.toolCalls ? { toolCalls: answer.toolCalls } : {}),
+      engine: gemini ? 'gemini' : 'bedrock',
     };
   }
 
-  async function executeChat(state, message) {
+  async function executeChat(state, message, engine) {
     const requested = recordRequest(state, message);
+    // Gemini is opt-in per message (the chat toggle) and only when this server has a Gemini key.
+    const gemini = engine === 'gemini' && provider.gemini;
+    // Short cooking commands don't need a model; the engine answers them instantly, even in AI mode.
+    const quick = QUICK_COMMAND.test(message.trim().toLowerCase().replace(/’/g, "'"));
     let result;
-    if (providerMode !== 'bedrock') result = demoChat(requested, message);
+    if ((providerMode !== 'bedrock' && !gemini) || (gemini && quick)) result = demoChat(requested, message);
     else {
       try {
-        result = await agentChat(requested, message);
+        result = await agentChat(requested, message, gemini ? 'gemini' : 'bedrock');
       } catch (err) {
-        // When Bedrock can't answer (account not enabled, outage, timeout), keep cooking with the offline
+        // When the model can't answer (account not enabled, outage, timeout), keep cooking with the offline
         // parser. The response is flagged so the app can show an "Offline mode" badge; replies stay clean
-        // because they are read aloud. Daily-limit (429) and storage (503) errors are still reported as errors.
-        if (err.status !== 502) throw err;
+        // because they are read aloud. Storage (503) errors, and Bedrock's daily limit (429), stay errors.
+        if (err.status !== 502 && !(gemini && err.status === 429)) throw err;
         const offline = demoChat(requested, message);
         result = {
           ...offline,
@@ -829,7 +853,7 @@ export function createApplication({ store, env = process.env, interpret, bedrock
           case '/api/chat': {
             if (typeof body.message !== 'string' || !body.message.trim() || body.message.length > MAX_MESSAGE_LENGTH)
               return json(400, { error: `Write a request of 1-${MAX_MESSAGE_LENGTH} characters.` }, cookie);
-            const result = await executeChat(state, body.message.trim());
+            const result = await executeChat(state, body.message.trim(), body.engine);
             state = result.state;
             more = { ...result };
             delete more.state;

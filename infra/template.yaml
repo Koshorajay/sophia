@@ -26,6 +26,16 @@ Parameters:
     MinValue: 1
     MaxValue: 1000
     Description: Global per-day model-call ceiling in application code, not a total AWS spending cap.
+  GeminiApiKey:
+    Type: String
+    NoEcho: true
+    Default: ''
+    Description: Optional Google Gemini API key for the opt-in "AI Gemini" chat toggle. Empty hides the toggle.
+  GeminiModel:
+    Type: String
+    Default: gemini-3.5-flash-lite
+    AllowedPattern: '[a-z0-9.-]+'
+    Description: Gemini model used when the toggle is on.
   UseCloudFront:
     Type: String
     Default: 'yes'
@@ -131,6 +141,8 @@ Resources:
           SOPHIA_ACCESS_CODE: !Ref AccessCode
           SOPHIA_MAX_DAILY_CALLS: !Ref MaxDailyModelCalls
           SOPHIA_VOICE: !Ref SpokenReplies
+          GEMINI_API_KEY: !Ref GeminiApiKey
+          GEMINI_MODEL: !Ref GeminiModel
           NODE_ENV: production
       Tags:
         - Key: Project

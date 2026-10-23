@@ -2509,3 +2509,15 @@ p {
   color: var(--orange);
   border-color: transparent;
 }
+
+/* The voice and AI switches sit side by side in the assistant header. */
+.assistant-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.provider-badge.gemini {
+  background: #e7eefb;
+  color: #2f5aa8;
+  border-color: transparent;
+}

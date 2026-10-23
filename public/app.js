@@ -488,7 +488,7 @@ function historyView() {
 
 function aside() {
   const activity = activityFeed(4);
-  return `<aside class="aside" aria-label="Sophia assistant and kitchen activity"><section class="assistant-card" id="assistant"><div class="assistant-head"><div class="assistant-head-row"><div class="assistant-identity"><span class="assistant-orb" aria-hidden="true"></span><div><strong>Ask Sophia</strong><p>Your kitchen companion</p></div></div>${providerBadge()}</div>${voiceRepliesButton()}</div><div class="chat-transcript" id="chat-transcript" role="log" aria-live="polite" aria-relevant="additions text">${ui.messages.map(m => `<div class="chat-entry ${m.role}"><div class="chat-entry-label">${m.role === 'assistant' ? icon('spark', 12) + ' Sophia' : m.voice ? icon('mic', 12) + ' You, by voice' : 'You'}</div><div class="chat-entry-body">${esc(m.content)}</div></div>`).join('')}${ui.busy ? '<div class="chat-entry"><div class="chat-entry-label">Sophia</div><div class="chat-entry-body">A moment, I’m checking your kitchen…</div></div>' : ''}</div><div class="chat-chips"><button class="chat-chip" data-chat="What can I cook with my pantry?">What can I cook with what I have?</button><button class="chat-chip" data-chat="What is my next cooking step?">Help me with my next step</button><button class="chat-chip" data-chat="How does the grocery forecast work?">Plan next month's groceries</button></div><form id="chat-form" class="chat-form"><label class="visually-hidden" for="chat-input">Ask Sophia</label><input id="chat-input" name="message" placeholder="Type, or tap the mic" maxlength="1500" autocomplete="off" required ${ui.busy ? 'disabled' : ''}>${micButton('chat-mic')}<button class="send-button" type="submit" aria-label="Send message" ${ui.busy ? 'disabled' : ''}>${icon('send', 15)}</button></form>${voiceBar()}</section>
+  return `<aside class="aside" aria-label="Sophia assistant and kitchen activity"><section class="assistant-card" id="assistant"><div class="assistant-head"><div class="assistant-head-row"><div class="assistant-identity"><span class="assistant-orb" aria-hidden="true"></span><div><strong>Ask Sophia</strong><p>Your kitchen companion</p></div></div>${providerBadge()}</div><div class="assistant-toggles">${voiceRepliesButton()}${geminiToggle()}</div></div><div class="chat-transcript" id="chat-transcript" role="log" aria-live="polite" aria-relevant="additions text">${ui.messages.map(m => `<div class="chat-entry ${m.role}"><div class="chat-entry-label">${m.role === 'assistant' ? icon('spark', 12) + ' Sophia' : m.voice ? icon('mic', 12) + ' You, by voice' : 'You'}</div><div class="chat-entry-body">${esc(m.content)}</div></div>`).join('')}${ui.busy ? '<div class="chat-entry"><div class="chat-entry-label">Sophia</div><div class="chat-entry-body">A moment, I’m checking your kitchen…</div></div>' : ''}</div><div class="chat-chips"><button class="chat-chip" data-chat="What can I cook with my pantry?">What can I cook with what I have?</button><button class="chat-chip" data-chat="What is my next cooking step?">Help me with my next step</button><button class="chat-chip" data-chat="How does the grocery forecast work?">Plan next month's groceries</button></div><form id="chat-form" class="chat-form"><label class="visually-hidden" for="chat-input">Ask Sophia</label><input id="chat-input" name="message" placeholder="Type, or tap the mic" maxlength="1500" autocomplete="off" required ${ui.busy ? 'disabled' : ''}>${micButton('chat-mic')}<button class="send-button" type="submit" aria-label="Send message" ${ui.busy ? 'disabled' : ''}>${icon('send', 15)}</button></form>${voiceBar()}</section>
     <section class="help-card"><span class="eyebrow">A little less guesswork</span><h3>Tomorrow's groceries,<br>from yesterday's meals.</h3><p>Suggestions learn from the meals you cook.</p><button class="text-button" data-view="groceries">Explore your grocery plan ${icon('arrow', 12)}</button></section>
     <section class="activity-card"><span class="eyebrow">Around your kitchen</span><ul class="activity-list">${activity.length ? activity.map(a => `<li><div>${esc(a.message)}${a.count > 1 ? ` <span class="activity-count" title="Repeated ${a.count} times">×${a.count}</span>` : ''}<time datetime="${esc(a.at)}">${date(a.at)}${a.count > 1 ? ' · latest' : ''}</time></div></li>`).join('') : '<li><div>Your kitchen is ready. Choose a dish to get started.</div></li>'}</ul><button class="text-button" data-action="reset" style="font-size:12px">Reset sample kitchen</button></section></aside>`;
 }
@@ -515,6 +515,20 @@ function handsFreeButton(className = '') {
   if (!speechRecognition()) return '';
   return `<button type="button" class="hands-free-toggle ${className} ${ui.voice.handsFree ? 'on' : ''}" data-action="hands-free" aria-pressed="${ui.voice.handsFree}" title="Keep listening between turns">Hands-free ${ui.voice.handsFree ? 'on' : 'off'}</button>`;
 }
+const GEMINI_KEY = 'sophia-gemini-ai';
+/** Opt-in switch for the Google Gemini agent; shown only when the server has Gemini configured. */
+function geminiToggle() {
+  if (!ui.provider?.gemini) return '';
+  return `<button type="button" class="voice-replies ai-toggle ${ui.useGemini ? 'on' : ''}" data-action="toggle-gemini" aria-pressed="${!!ui.useGemini}" title="Use Google Gemini to understand free conversation. It acts only through Sophia's tools.">${icon('spark', 15)} AI: Gemini ${ui.useGemini ? 'on' : 'off'}</button>`;
+}
+function restoreGeminiPreference() {
+  try {
+    ui.useGemini = localStorage.getItem(GEMINI_KEY) === 'on';
+  } catch {
+    /* Gemini stays off without storage. */
+  }
+}
+
 function voiceRepliesButton(className = '') {
   if (!canSpeak()) return '';
   return `<button type="button" class="voice-replies ${className} ${ui.speak ? 'on' : ''}" data-action="voice" aria-pressed="${ui.speak}" aria-label="Voice replies ${ui.speak ? 'on' : 'off'}" title="Sophia reads every reply and each new step aloud">${icon(ui.speak ? 'volume' : 'mute', 18)}<span>Voice replies ${ui.speak ? 'on' : 'off'}</span></button>`;
@@ -623,7 +637,9 @@ function render() {
 
 /** Which brain answered: Bedrock, the labelled offline fallback while Bedrock is unavailable, or the local demo. */
 function providerBadge() {
-  if (ui.provider.mode === 'bedrock' && ui.offlineFallback)
+  if (ui.useGemini && ui.provider?.gemini && !ui.offlineFallback)
+    return `<span class="provider-badge gemini" title="Google Gemini understands your words; Sophia's kitchen engine still decides what's allowed.">Gemini AI</span>`;
+  if ((ui.provider.mode === 'bedrock' || ui.useGemini) && ui.offlineFallback)
     return `<span class="provider-badge offline" title="AWS Bedrock isn't available for this account right now, so replies use Sophia's offline parser. It switches back automatically.">Offline mode</span>`;
   return `<span class="provider-badge" title="${esc(ui.provider.label)}">${ui.provider.mode === 'bedrock' ? 'AWS Bedrock' : 'Demo mode'}</span>`;
 }
@@ -642,7 +658,10 @@ async function sendChat(message, { spoken = false, heard = '' } = {}) {
   scrollChat();
   let reply;
   try {
-    const result = await api('/api/chat', { message });
+    const result = await api('/api/chat', {
+      message,
+      ...(ui.useGemini && ui.provider?.gemini ? { engine: 'gemini' } : {}),
+    });
     applyEnvelope(result);
     const offline = result.fallback === 'offline';
     if (offline && !ui.offlineFallback)
@@ -1360,6 +1379,22 @@ app.addEventListener('click', async event => {
     document.querySelector('#assistant')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     document.querySelector('#chat-input')?.focus({ preventScroll: true });
   }
+  if (action === 'toggle-gemini') {
+    ui.useGemini = !ui.useGemini;
+    ui.offlineFallback = false;
+    try {
+      localStorage.setItem(GEMINI_KEY, ui.useGemini ? 'on' : 'off');
+    } catch {
+      /* The choice lasts for this page without storage. */
+    }
+    render();
+    toast(
+      ui.useGemini
+        ? 'Gemini AI is on: talk naturally. It can take a few seconds to answer.'
+        : 'Gemini AI is off: Sophia uses its built-in commands.',
+    );
+    return;
+  }
   if (action === 'voice') {
     ui.speak = !ui.speak;
     saveVoicePreference();
@@ -1657,6 +1692,7 @@ async function boot() {
       restoreConversation();
       restoreTimer();
       restoreVoicePreference();
+      restoreGeminiPreference();
       setVoiceState('idle');
       setInterval(tick, 250);
     }

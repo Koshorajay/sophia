@@ -42,8 +42,8 @@ function validateSave(id, state, expectedRevision) {
   }
 }
 function validateQuota(key, limit) {
-  // Model calls use the date as the key; spoken replies use "speech:<date>".
-  const day = typeof key === 'string' ? key.replace(/^speech:/, '') : '';
+  // Bedrock calls use the date as the key; spoken replies and Gemini use "speech:<date>" and "gemini:<date>".
+  const day = typeof key === 'string' ? key.replace(/^(?:speech|gemini):/, '') : '';
   if (
     !/^\d{4}-\d{2}-\d{2}$/.test(day) ||
     !Number.isFinite(Date.parse(`${day}T00:00:00.000Z`)) ||

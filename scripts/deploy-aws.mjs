@@ -178,6 +178,9 @@ async function main() {
       ['ReservedConcurrency', String(concurrency)],
       ['SpokenReplies', voice],
       ['UseCloudFront', cloudfront],
+      // Optional, from the environment only (never command-line arguments, which other processes can see).
+      ['GeminiApiKey', process.env.SOPHIA_DEPLOY_GEMINI_KEY || ''],
+      ['GeminiModel', flags.get('gemini-model') || 'gemini-3.5-flash-lite'],
     ].map(([ParameterKey, ParameterValue]) => ({ ParameterKey, ParameterValue })),
   };
   aws(['cloudformation', 'create-change-set', '--cli-input-json', 'file:///dev/stdin'], input);

@@ -14,6 +14,7 @@ Sophia's kitchen is an **MCP server** (spec 2025-11-25, Streamable HTTP), the op
 - **Splits at the right moment.** "Dal for the three of us, Ravi likes it spicy." Sophia cooks one pot of dal, splits it, and gives only Ravi's bowl a red chilli tadka.
 - **Knows what's already in the pot.** "Actually, no chilli for Ravi" works until his tadka happens. "Remove the onion" after the onion is cooked is refused, with the reason. The AI can't talk its way around this: every action goes through a deterministic kitchen engine.
 - **Hands-free kitchen mode.** Big-type steps, voice control ("next", "repeat", "start the timer") and step timers.
+- **Optional Gemini AI.** While Bedrock is unavailable on a new AWS account, an "AI: Gemini" switch in the chat lets Google Gemini understand free conversation, through the very same tools and rules. Off by default; short commands like "done" never need a model.
 - **Talks back.** Turn on Voice replies and Sophia reads every answer and each new step aloud: with the Amazon Polly neural voice Kajal (Indian English) when deployed, or the browser's own voice locally.
 - **Checks the pantry before you start.** "Do I have everything for dal?" lists what's short, and "add them to my shopping list" saves it. Nothing is ever ordered or paid for.
 - **Remembers across sessions.** Household preferences, the meal in progress ("where was I?") and every meal you confirm cooking.
@@ -64,7 +65,7 @@ aws login --profile sophia --region us-east-1
 AWS_PROFILE=sophia AWS_REGION=us-east-1 SOPHIA_PROVIDER=bedrock BEDROCK_MODEL_ID=amazon.nova-lite-v1:0 SOPHIA_VOICE=polly npm start
 ```
 
-`SOPHIA_VOICE=polly` makes spoken replies use Amazon Polly's Kajal voice; leave it out to use the browser's voice.
+`SOPHIA_VOICE=polly` makes spoken replies use Amazon Polly's Kajal voice; leave it out to use the browser's voice. Setting `GEMINI_API_KEY` (and optionally `GEMINI_MODEL`, default `gemini-3.5-flash-lite`) shows the opt-in "AI: Gemini" switch in the chat.
 
 If Bedrock can't answer (for example, an AWS account where Bedrock isn't enabled yet, or a timeout), the chat keeps working with the offline parser and the chat header shows an "Offline mode" badge. The real AWS error goes to the server log.
 
