@@ -110,6 +110,8 @@ Each MCP session gets its own demo household. To cook in the same household as t
 
 One CloudFormation stack: CloudFront + private S3 for the app, API Gateway + Lambda for the API and MCP endpoint, DynamoDB for households, Bedrock for the agent, Polly for spoken replies, least-privilege IAM. See [docs/AWS_SETUP.md](docs/AWS_SETUP.md).
 
+The hosted demo is deployed with `--cloudfront no`, because CloudFront needs account verification on a new AWS account: Lambda serves the web app itself through API Gateway, and everything else is the same.
+
 ## Recipes
 
 30 dishes with 3 finishes each, mostly everyday Indian vegetarian and egg meals. Chilli never enters a shared pot; dal gets a tadka per bowl; palak's paneer (or sweet corn) goes in after the split. See [docs/RECIPES.md](docs/RECIPES.md) to add your own; no model training needed.
