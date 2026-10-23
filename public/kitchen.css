@@ -1135,3 +1135,50 @@ html[data-voice='thinking'] .mic-large::after {
     line-height: 1.15;
   }
 }
+
+/* The chat is the main way to use Sophia. On laptop and desktop screens it gets a wider column and fits
+   the first screen: the header, suggestions and message box stay put and only the messages scroll. */
+@media (min-width: 1061px) {
+  .page-layout {
+    grid-template-columns: minmax(0, 1fr) clamp(340px, 28vw, 430px);
+  }
+  .assistant-card {
+    display: flex;
+    flex-direction: column;
+    /* The top bar and page padding sit above the card. */
+    height: calc(100vh - 135px);
+    min-height: 440px;
+    max-height: 820px;
+  }
+  .assistant-head {
+    flex: none;
+    gap: 10px;
+    padding: 14px 16px;
+  }
+  .assistant-head .voice-replies {
+    min-height: 34px;
+  }
+  .chat-transcript {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+  }
+  .chat-chips {
+    flex: none;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 10px 14px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .chat-chip {
+    flex: none;
+    padding: 6px 9px;
+    white-space: nowrap;
+  }
+  .chat-form,
+  .voice-bar {
+    flex: none;
+  }
+}
