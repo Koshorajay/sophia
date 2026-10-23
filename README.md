@@ -7,7 +7,7 @@ Sophia is a cooking companion for Alexa+. It helps one person cook one meal for 
 Sophia's kitchen is an **MCP server** (spec 2025-11-25, Streamable HTTP), the open standard Alexa+ integrations use. The web app in this repo simulates the Alexa+ experience on an Echo Show-style screen: you talk, an Amazon Bedrock agent calls Sophia's tools, and Sophia talks back.
 
 > Built for the [Amazon Developer "Build, Ship, Shape" hackathon](https://amazonappdev2026.devpost.com/), Alexa+ track and AWS Builder mini challenge.
-> Demo video: **[link]** · Hosted demo: **https://p2h4hezy1h.execute-api.us-east-1.amazonaws.com** (access code in the Devpost testing notes)
+> Demo video: **https://youtu.be/bkmaL6ltxig** · Hosted demo: **https://p2h4hezy1h.execute-api.us-east-1.amazonaws.com** (access code in the Devpost testing notes)
 
 ## What it does
 
