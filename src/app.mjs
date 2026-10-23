@@ -20,6 +20,10 @@ import {
   checkPantry,
   mealShortages,
   updateShoppingList,
+  setTastes,
+  tastesOf,
+  preferredVariant,
+  TASTES,
 } from './engine.mjs';
 import { FileStore, DynamoStore } from './store.mjs';
 import { kitchenTools, runKitchenTool, nextInstruction, describeMissing } from './tools.mjs';
@@ -28,7 +32,18 @@ import { createMcpHandler } from './mcp.mjs';
 const VERSION = '0.1.0';
 const MAX_MESSAGE_LENGTH = 1500;
 const CONVERSATION_MEMORY = 10;
-const LIMIT_ACTIONS = new Set(['plan', 'next', 'finish', 'forecast', 'alter', 'cancel', 'check', 'shop', 'help']);
+const LIMIT_ACTIONS = new Set([
+  'plan',
+  'next',
+  'finish',
+  'forecast',
+  'alter',
+  'cancel',
+  'check',
+  'shop',
+  'tastes',
+  'help',
+]);
 // The chat response keeps the action names the web client already understands.
 const TOOL_ACTIONS = {
   plan_meal: 'plan',
@@ -41,6 +56,7 @@ const TOOL_ACTIONS = {
   check_pantry: 'check',
   add_to_shopping_list: 'shop',
   update_shopping_list: 'shop',
+  save_tastes: 'tastes',
 };
 const QUICK_COMMAND =
   /^(?:next|next step|done|ok done|step done|this step is done|complete (?:this |the )?step|confirm split|split done|what(?:'s| is) next\??|where was i\??)[.!]?$/;
@@ -52,6 +68,26 @@ const LOOSE_SYNONYMS = {
   egg: ['eggs'],
   'without-cheese': ['no cheese'],
 };
+// Words for saved tastes, checked in order ("no cheese" before "cheese").
+const TASTE_WORDS = [
+  ['without-cheese', /\b(?:no|without) cheese\b/],
+  ['spicy', /\b(?:spicy|spice|hot|chill?(?:i|ie)s?|chili)\b/],
+  ['mild', /\b(?:mild|plain|classic)\b/],
+  ['ghee', /\bghee\b/],
+  ['lemon', /\blemon(?:y)?\b/],
+  ['coconut', /\bcoconut\b/],
+  ['cheese', /\bchees(?:e|y)\b/],
+  ['egg', /\beggs?\b/],
+  ['pepper', /\b(?:black )?pepper\b/],
+  ['corn', /\b(?:sweet )?corn\b/],
+  ['cucumber', /\bcucumbers?\b/],
+  ['carrot', /\bcarrots?\b/],
+  ['banana', /\bbananas?\b/],
+  ['cinnamon', /\bcinnamon\b/],
+];
+const LASTING_TASTE =
+  /\b(?:always|usually|loves?|likes?|liking|prefers?|favou?rite|remember|from now on|any ?more|these days|hates?|dislikes?|can'?t (?:eat|handle|take|stand)|never)\b/;
+const DISLIKE = /\b(?:not|no|never|hates?|dislikes?|can'?t|cannot|won'?t|doesn'?t|does not|don'?t|do not|stop)\b/;
 const NEGATION = /\b(?:not|no|never|without|remove|omit|hold)\b|n't\b/;
 const cleanHeaders = (headers = {}) =>
   Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
@@ -162,7 +198,7 @@ export function createApplication({
       if (locks.get(id) === work) locks.delete(id);
     }
   }
-  const envelope = (state, more = {}) => ({ state, catalog, provider, ...more });
+  const envelope = (state, more = {}) => ({ state, catalog, tastes: TASTES, provider, ...more });
   const json = (status, value, headers = {}) => ({
     status,
     headers: {
@@ -239,12 +275,11 @@ export function createApplication({
   /** Household preferences first. Anonymous requests such as "one spicy" change a plate whose finish was not asked for,
    * otherwise a second plate with the same requested finish; guests change before household members. */
   function demoPortions(state, dish, servings, mentioned) {
-    const supported = new Set(dish.variants.map(v => v.id));
     const portions = Array.from({ length: servings }, (_, i) => {
       const person = state.household[i];
       return {
         name: person?.name || `Guest ${i + 1}`,
-        variant: supported.has(person?.preference) ? person.preference : dish.defaultVariant,
+        variant: person ? preferredVariant(person, dish.id) : dish.defaultVariant,
       };
     });
     const lastFirst = [...portions.keys()].reverse();
@@ -255,6 +290,46 @@ export function createApplication({
       portions[index].variant = variant;
     }
     return portions;
+  }
+
+  /** "Noor loves ghee", "Ravi can't eat chilli any more", "What does Ravi like?": lasting tastes, not tonight's plate. */
+  function tasteIntent(state, t) {
+    const person = state.household.find(p => new RegExp(`\\b${escapeRegExp(p.name.toLowerCase())}\\b`).test(t));
+    const describe = p => {
+      const saved = tastesOf(p);
+      return `${p.name} likes ${saved.length ? saved.map(x => TASTES[x]?.toLowerCase() || x).join(', then ') : 'the dish defaults'}`;
+    };
+    if (
+      /^(?:what|which|how|does|do)\b/.test(t.trim()) &&
+      /\b(?:like|likes|tastes?|prefers?|preferences?|favou?rites?)\b/.test(t) &&
+      (person || /\b(?:everyone|everybody|family|we|us|our|household)\b/.test(t))
+    )
+      return {
+        action: 'help',
+        reply: `${(person ? [person] : state.household).map(describe).join('. ')}. Sophia uses the first one each dish offers.`,
+      };
+    if (!person || !LASTING_TASTE.test(t) || matchRecipes(t).length) return null;
+    if (/\b(?:tonight|today|this time|right now|for now|this meal|this dish)\b/.test(t)) return null;
+    const words = TASTE_WORDS.filter(([, pattern]) => pattern.test(t)).map(([id]) => id);
+    const found = words.includes('without-cheese') ? words.filter(x => x !== 'cheese') : words;
+    if (!found.length)
+      return {
+        action: 'help',
+        reply: `Tell me a finish to remember, for example “${person.name} always likes it spicy” or “${person.name} loves ghee”.`,
+      };
+    let list = tastesOf(person).filter(x => Object.hasOwn(TASTES, x));
+    const dislike = DISLIKE.test(t) && !found.includes('without-cheese');
+    if (dislike) {
+      list = list.filter(x => !found.includes(x));
+      if (found.includes('spicy')) list = ['mild', ...list.filter(x => x !== 'mild')];
+      if (found.includes('cheese')) list = ['without-cheese', ...list.filter(x => x !== 'without-cheese')];
+    } else {
+      const opposite = { spicy: 'mild', mild: 'spicy', cheese: 'without-cheese', 'without-cheese': 'cheese' };
+      list = [...found, ...list.filter(x => !found.includes(x) && !found.some(f => opposite[f] === x))];
+    }
+    list = list.slice(0, 4);
+    if (!list.length) list = ['mild'];
+    return { action: 'tastes', arguments: { name: person.name, tastes: list } };
   }
 
   function demoIntent(message, state) {
@@ -331,6 +406,8 @@ export function createApplication({
       if (!cooking) return { action: 'help', reply: `There is no active meal to cancel. ${nextInstruction(state)}` };
       return { action: 'cancel', arguments: {} };
     }
+    const taste = tasteIntent(state, t);
+    if (taste) return taste;
     if (switchTo.length && named.length > 1)
       return { action: 'help', reply: 'Change one person’s finish at a time, for example “Make Ravi’s spicy”.' };
     if (switchTo.length && target) {
@@ -350,11 +427,10 @@ export function createApplication({
       const servings = state.household.length || 1;
       const choices = catalog
         .map(dish => {
-          const variants = dish.variants.map(v => v.id),
-            fallback = dish.defaultVariant;
+          const fallback = dish.defaultVariant;
           const portions = Array.from({ length: servings }, (_, i) => ({
             name: state.household[i]?.name || `Guest ${i + 1}`,
-            variant: variants.includes(state.household[i]?.preference) ? state.household[i].preference : fallback,
+            variant: state.household[i] ? preferredVariant(state.household[i], dish.id) : fallback,
           }));
           const missing = ingredientsFor(dish.id, portions).filter(
             item => (state.pantry.find(p => p.id === item.id)?.quantity || 0) < item.quantity,
@@ -551,6 +627,10 @@ export function createApplication({
         reply = `${outcome.result.message} Nothing is ordered; it's a list for your next shop.`;
         break;
       }
+      case 'tastes':
+        next = setTastes(requested, args);
+        reply = `${next.activity.at(-1).message}${requested.session?.status === 'cooking' ? ' Tonight’s plates stay as planned; say “Make Ravi’s spicy” to change one now.' : ''}`;
+        break;
       case 'forecast':
         forecast = forecastGroceries(requested, { weeks: 4, awayDays: args.awayDays || 0, confirmPantry: false });
         reply = `I based this suggestion on ${forecast.historyCount} confirmed cooked meals, not recipe requests. Staples cover the next four weeks; fresh items are weekly suggestions. Confirm pantry stock in Grocery plan before subtracting what you own.`;
@@ -808,6 +888,9 @@ export function createApplication({
           }
           case '/api/pantry':
             state = updatePantry(state, body);
+            break;
+          case '/api/tastes':
+            state = setTastes(state, { name: body.name, tastes: body.tastes });
             break;
           case '/api/forecast':
             return json(200, { forecast: forecastGroceries(state, body), sourceRevision: state.revision }, cookie);

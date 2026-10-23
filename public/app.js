@@ -5,6 +5,7 @@ const app = document.querySelector('#app');
 const ui = {
   state: null,
   catalog: [],
+  tastes: {},
   provider: { mode: 'demo', label: 'Local demo' },
   view: 'cook',
   dishId: 'fried-rice',
@@ -144,6 +145,36 @@ function variantLabel(dishId, id) {
 function cookedHistory() {
   return (ui.state?.history || []).filter(h => h.confirmed === true);
 }
+/** A person's saved tastes, most liked first (older households saved a single preference). */
+function tastesOf(person) {
+  return Array.isArray(person?.tastes) ? person.tastes : person?.preference ? [person.preference] : [];
+}
+const OPPOSITE_TASTE = { mild: 'spicy', spicy: 'mild', cheese: 'without-cheese', 'without-cheese': 'cheese' };
+/** Saved tastes per person: Sophia gives each plate the first one a dish offers. */
+function tastesCard() {
+  const people = ui.state.household || [];
+  if (!people.length) return '';
+  const busy = ui.busy ? 'disabled' : '';
+  const label = id => ui.tastes[id] || String(id).replaceAll('-', ' ');
+  return `<section class="tastes-card" aria-label="Family tastes"><span class="eyebrow">Family tastes</span><h3>Cooked the way each of you likes it.</h3><p class="small muted">Every dish gives each plate the first taste it offers. Tap a taste to make it the favourite, or tell Sophia “Noor loves ghee”.</p><ul class="taste-people">${people
+    .map(person => {
+      const saved = tastesOf(person);
+      const name = esc(person.name);
+      const choices = Object.keys(ui.tastes).filter(id => !saved.includes(id));
+      return `<li><strong>${name}</strong><div class="taste-chips">${saved
+        .map(
+          (taste, index) =>
+            `<span class="taste-chip ${index === 0 ? 'favourite' : ''}"><button class="taste-name" data-action="taste-first" data-name="${name}" data-taste="${esc(taste)}" aria-label="${index === 0 ? `${esc(label(taste))} is ${name}’s favourite` : `Make ${esc(label(taste))} ${name}’s favourite`}" ${busy}>${index === 0 ? '★ ' : ''}${esc(label(taste))}</button>${saved.length > 1 ? `<button class="taste-remove" data-action="taste-remove" data-name="${name}" data-taste="${esc(taste)}" aria-label="Remove ${esc(label(taste))} for ${name}" ${busy}>${icon('close', 11)}</button>` : ''}</span>`,
+        )
+        .join(
+          '',
+        )}${saved.length < 4 && choices.length ? `<select class="taste-add" data-taste-add="${name}" aria-label="Add a taste for ${name}" ${busy}><option value="">+ Add</option>${choices.map(id => `<option value="${esc(id)}">${esc(label(id))}</option>`).join('')}</select>` : ''}</div></li>`;
+    })
+    .join('')}</ul></section>`;
+}
+function saveTastes(name, tastes, message) {
+  return mutate('/api/tastes', { name, tastes }, message);
+}
 function initPortions() {
   const dish = selectedDish();
   if (!dish) return;
@@ -155,9 +186,9 @@ function initPortions() {
       name: old?.name || person?.name || `Person ${i + 1}`,
       variant: dish.variants.some(v => v.id === old?.variant)
         ? old.variant
-        : dish.variants.some(v => v.id === person?.preference)
-          ? person.preference
-          : dish.defaultVariant || dish.variants[0]?.id,
+        : tastesOf(person).find(taste => dish.variants.some(v => v.id === taste)) ||
+          dish.defaultVariant ||
+          dish.variants[0]?.id,
     };
   });
 }
@@ -239,6 +270,7 @@ function applyEnvelope(result) {
     ui.state = result.state;
   }
   if (result.catalog) ui.catalog = Array.isArray(result.catalog) ? result.catalog : Object.values(result.catalog);
+  if (result.tastes) ui.tastes = result.tastes;
   if (result.provider) ui.provider = result.provider;
 }
 function toast(message, error = false) {
@@ -489,6 +521,7 @@ function historyView() {
 function aside() {
   const activity = activityFeed(4);
   return `<aside class="aside" aria-label="Sophia assistant and kitchen activity"><section class="assistant-card" id="assistant"><div class="assistant-head"><div class="assistant-head-row"><div class="assistant-identity"><span class="assistant-orb" aria-hidden="true"></span><div><strong>Ask Sophia</strong><p>Your kitchen companion</p></div></div>${providerBadge()}</div><div class="assistant-toggles">${voiceRepliesButton()}${geminiToggle()}</div></div><div class="chat-transcript" id="chat-transcript" role="log" aria-live="polite" aria-relevant="additions text">${ui.messages.map(m => `<div class="chat-entry ${m.role}"><div class="chat-entry-label">${m.role === 'assistant' ? icon('spark', 12) + ' Sophia' : m.voice ? icon('mic', 12) + ' You, by voice' : 'You'}</div><div class="chat-entry-body">${esc(m.content)}</div></div>`).join('')}${ui.busy ? '<div class="chat-entry"><div class="chat-entry-label">Sophia</div><div class="chat-entry-body">A moment, I’m checking your kitchen…</div></div>' : ''}</div><div class="chat-chips"><button class="chat-chip" data-chat="What can I cook with my pantry?">What can I cook with what I have?</button><button class="chat-chip" data-chat="What is my next cooking step?">Help me with my next step</button><button class="chat-chip" data-chat="How does the grocery forecast work?">Plan next month's groceries</button></div><form id="chat-form" class="chat-form"><label class="visually-hidden" for="chat-input">Ask Sophia</label><input id="chat-input" name="message" placeholder="Type, or tap the mic" maxlength="1500" autocomplete="off" required ${ui.busy ? 'disabled' : ''}>${micButton('chat-mic')}<button class="send-button" type="submit" aria-label="Send message" ${ui.busy ? 'disabled' : ''}>${icon('send', 15)}</button></form>${voiceBar()}</section>
+    ${tastesCard()}
     <section class="help-card"><span class="eyebrow">A little less guesswork</span><h3>Tomorrow's groceries,<br>from yesterday's meals.</h3><p>Suggestions learn from the meals you cook.</p><button class="text-button" data-view="groceries">Explore your grocery plan ${icon('arrow', 12)}</button></section>
     <section class="activity-card"><span class="eyebrow">Around your kitchen</span><ul class="activity-list">${activity.length ? activity.map(a => `<li><div>${esc(a.message)}${a.count > 1 ? ` <span class="activity-count" title="Repeated ${a.count} times">×${a.count}</span>` : ''}<time datetime="${esc(a.at)}">${date(a.at)}${a.count > 1 ? ' · latest' : ''}</time></div></li>`).join('') : '<li><div>Your kitchen is ready. Choose a dish to get started.</div></li>'}</ul><button class="text-button" data-action="reset" style="font-size:12px">Reset sample kitchen</button></section></aside>`;
 }
@@ -1472,6 +1505,25 @@ app.addEventListener('click', async event => {
     const result = await mutate('/api/shopping-list', { op: 'add-shortages' });
     if (result?.reply) toast(result.reply);
   }
+  if (action === 'taste-first' || action === 'taste-remove') {
+    const person = (ui.state.household || []).find(p => p.name === button.dataset.name);
+    const saved = tastesOf(person);
+    const taste = button.dataset.taste;
+    if (!person || (action === 'taste-first' && saved[0] === taste)) return;
+    const label = (ui.tastes[taste] || taste).toLowerCase();
+    if (action === 'taste-first')
+      await saveTastes(
+        person.name,
+        [taste, ...saved.filter(x => x !== taste)],
+        `${label} is now ${person.name}’s favourite.`,
+      );
+    else
+      await saveTastes(
+        person.name,
+        saved.filter(x => x !== taste),
+        `Removed ${label} for ${person.name}.`,
+      );
+  }
   if (action === 'list-toggle') await mutate('/api/shopping-list', { op: 'toggle', id: button.dataset.id });
   if (action === 'list-remove')
     await mutate('/api/shopping-list', { op: 'remove', id: button.dataset.id }, 'Removed from your shopping list.');
@@ -1567,6 +1619,17 @@ app.addEventListener('change', event => {
   if (event.target.dataset.portionVariant !== undefined)
     ui.portions[Number(event.target.dataset.portionVariant)].variant = event.target.value;
   if (event.target.name === 'confirmPantry') ui.confirmPantry = event.target.checked;
+  const taster = event.target.dataset.tasteAdd;
+  if (taster !== undefined && event.target.value) {
+    const person = (ui.state.household || []).find(p => p.name === taster);
+    const taste = event.target.value;
+    const kept = tastesOf(person).filter(x => x !== OPPOSITE_TASTE[taste]);
+    saveTastes(
+      taster,
+      [...kept, taste].slice(0, 4),
+      `Saved for ${taster}: ${(ui.tastes[taste] || taste).toLowerCase()}.`,
+    );
+  }
 });
 
 app.addEventListener('submit', async event => {

@@ -71,6 +71,64 @@ function instructionWithOmissions(dishId, step, recipe, omitted) {
 export function finishLabel(dishId, variant) {
   return catalog.find(dish => dish.id === dishId)?.variants.find(item => item.id === variant)?.label || variant;
 }
+/** Finishes a person can save as a lasting taste, with dish-neutral labels. */
+export const TASTES = {
+  mild: 'Mild',
+  spicy: 'Spicy',
+  ghee: 'Ghee',
+  lemon: 'Lemon',
+  coconut: 'Coconut',
+  cheese: 'Cheese',
+  'without-cheese': 'No cheese',
+  egg: 'Egg',
+  pepper: 'Black pepper',
+  corn: 'Sweet corn',
+  cucumber: 'Cucumber',
+  carrot: 'Carrot',
+  banana: 'Banana',
+  cinnamon: 'Cinnamon',
+};
+/** A person's saved tastes, most liked first. Households saved before tastes existed have one preference. */
+export const tastesOf = person =>
+  Array.isArray(person?.tastes) ? person.tastes : person?.preference ? [person.preference] : [];
+/** The first saved taste this dish offers, otherwise the dish default. */
+export function preferredVariant(person, dishId) {
+  const dish = catalog.find(item => item.id === dishId);
+  return (
+    tastesOf(person).find(taste => dish.variants.some(item => item.id === taste)) ||
+    recipeDefinitions[dishId].defaultVariant
+  );
+}
+/** Replace one household member's saved tastes. Future plans and pantry checks use them; a meal in progress keeps its plates. */
+export function setTastes(state, { name, tastes } = {}) {
+  const person = state.household.find(
+    p =>
+      p.name.toLowerCase() ===
+      String(name || '')
+        .trim()
+        .toLowerCase(),
+  );
+  if (!person) throw new Error(`Choose someone in this household: ${state.household.map(p => p.name).join(', ')}.`);
+  if (!Array.isArray(tastes) || tastes.length < 1 || tastes.length > 4)
+    throw new Error('Save one to four tastes, most liked first.');
+  const unknown = tastes.find(taste => !Object.hasOwn(TASTES, taste));
+  if (unknown !== undefined)
+    throw new Error(`"${unknown}" is not a taste Sophia knows. Choose from: ${Object.keys(TASTES).join(', ')}.`);
+  const list = [...new Set(tastes)];
+  if (list.includes('mild') && list.includes('spicy')) throw new Error('Choose mild or spicy, not both.');
+  if (list.includes('cheese') && list.includes('without-cheese'))
+    throw new Error('Choose cheese or no cheese, not both.');
+  const next = change(state);
+  const saved = next.household.find(p => p.id === person.id);
+  saved.tastes = list;
+  saved.preference = list[0];
+  activity(
+    next,
+    'tastes',
+    `Saved ${person.name}’s tastes: ${list.map(taste => TASTES[taste].toLowerCase()).join(', ')}. Future meals use them.`,
+  );
+  return next;
+}
 function normalizedPortions(state, dishId, servings, portions) {
   const dish = catalog.find(item => item.id === dishId);
   if (!dish) throw new Error('Choose a dish from the curated recipe collection.');
@@ -82,9 +140,7 @@ function normalizedPortions(state, dishId, servings, portions) {
       const person = state.household[index];
       return {
         name: person?.name || `Person ${index + 1}`,
-        variant: dish.variants.some(item => item.id === person?.preference)
-          ? person.preference
-          : recipeDefinitions[dishId].defaultVariant,
+        variant: person ? preferredVariant(person, dishId) : recipeDefinitions[dishId].defaultVariant,
       };
     });
   if (!Array.isArray(chosen) || chosen.length !== servings)

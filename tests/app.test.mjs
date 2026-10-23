@@ -273,6 +273,7 @@ test('Bedrock agent plans through engine tools and every model call counts towar
       'check_pantry',
       'add_to_shopping_list',
       'update_shopping_list',
+      'save_tastes',
     ],
   );
   assert.ok(

@@ -2521,3 +2521,84 @@ p {
   color: #2f5aa8;
   border-color: transparent;
 }
+
+/* Saved family tastes in the assistant column. */
+.tastes-card {
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+.tastes-card h3 {
+  margin: 6px 0 4px;
+}
+.taste-people {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+.taste-people li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 9px 0;
+  border-top: 1px solid var(--line);
+}
+.taste-people strong {
+  min-width: 48px;
+}
+.taste-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.taste-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--white);
+  font-size: 13px;
+}
+.taste-chip.favourite {
+  border-color: var(--forest);
+  background: var(--sage);
+}
+.taste-name,
+.taste-remove {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.taste-name {
+  padding: 4px 4px 4px 10px;
+}
+.taste-chip:not(:has(.taste-remove)) .taste-name {
+  padding-right: 10px;
+}
+.taste-remove {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 2px;
+  border-radius: 50%;
+  color: var(--muted);
+}
+.taste-remove:hover {
+  background: var(--sage);
+}
+.taste-add {
+  padding: 3px 8px;
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+}

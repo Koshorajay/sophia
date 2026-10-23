@@ -28,6 +28,7 @@ const TOOLS = [
   'check_pantry',
   'add_to_shopping_list',
   'update_shopping_list',
+  'save_tastes',
 ];
 
 /** Run the real server.mjs on a free port with its own temporary data directory. */

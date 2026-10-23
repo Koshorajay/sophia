@@ -300,9 +300,9 @@ export function createSeedState(options = {}) {
   const now = options.now || new Date().toISOString();
   if (!Number.isFinite(Date.parse(now))) throw new Error('A valid starting time is required.');
   const household = [
-    { id: 'asha', name: 'Asha', preference: 'mild' },
-    { id: 'ravi', name: 'Ravi', preference: 'spicy' },
-    { id: 'noor', name: 'Noor', preference: 'egg' },
+    { id: 'asha', name: 'Asha', preference: 'mild', tastes: ['mild'] },
+    { id: 'ravi', name: 'Ravi', preference: 'spicy', tastes: ['spicy'] },
+    { id: 'noor', name: 'Noor', preference: 'egg', tastes: ['egg'] },
   ];
   const pantry = [
     ingredient('rice', 'Dry rice', 1200, 'g', 'staple'),

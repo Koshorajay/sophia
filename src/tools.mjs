@@ -16,6 +16,9 @@ import {
   mealShortages,
   addToShoppingList,
   updateShoppingList,
+  setTastes,
+  tastesOf,
+  TASTES,
 } from './engine.mjs';
 
 const text = (description, maxLength = 120) => ({ type: 'string', maxLength, description });
@@ -39,7 +42,7 @@ export function kitchenSummary(state, { includePantry = false } = {}) {
   const finish = id => dish?.variants.find(v => v.id === id)?.label || id;
   const current = s?.status === 'cooking' ? s.steps.find(step => step.status !== 'completed') : null;
   return {
-    household: state.household.map(({ name, preference }) => ({ name, preference })),
+    household: state.household.map(person => ({ name: person.name, tastes: tastesOf(person) })),
     meal: s
       ? {
           dishId: s.dishId,
@@ -206,7 +209,7 @@ const definitions = [
     name: 'get_kitchen_state',
     title: 'Get kitchen state',
     description:
-      'Read the household kitchen: the people eating and their saved finish preferences, the active meal with its current step and remaining steps, each named portion and its finish, estimated pantry shortages, and how many meals are confirmed cooked. Call this first, and whenever you are unsure what step the cook is on. Read-only.',
+      'Read the household kitchen: the people eating and their saved tastes (finish ids, most liked first), the active meal with its current step and remaining steps, each named portion and its finish, estimated pantry shortages, and how many meals are confirmed cooked. Call this first, and whenever you are unsure what step the cook is on. Read-only.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -547,6 +550,32 @@ const definitions = [
     run(state, { op, ingredient }) {
       const id = ingredient ? resolvePantryItem(state, ingredient).id : undefined;
       const next = updateShoppingList(state, { op, id });
+      return changed(next, next.activity.at(-1).message);
+    },
+  },
+  {
+    name: 'save_tastes',
+    title: "Save a person's tastes",
+    description:
+      'Remember how one household member likes their food, as finishes ordered most liked first. Future meals and pantry checks give each person the first saved finish the dish offers. Call when the user states a lasting taste ("Noor loves ghee", "Ravi always wants it spicy", "Asha can\'t eat chilli any more"), not for tonight\'s plate alone: use alter_portion for that. This replaces the saved list, so include the tastes to keep from get_kitchen.',
+    inputSchema: {
+      type: 'object',
+      required: ['name', 'tastes'],
+      properties: {
+        name: text('Household member name.', 60),
+        tastes: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 4,
+          description: 'Finish ids, most liked first. Never both mild and spicy.',
+          items: { type: 'string', maxLength: 20, enum: Object.keys(TASTES), description: 'A finish id.' },
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    run(state, { name, tastes }) {
+      const next = setTastes(state, { name, tastes });
       return changed(next, next.activity.at(-1).message);
     },
   },
