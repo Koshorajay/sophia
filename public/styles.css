@@ -2502,3 +2502,10 @@ p {
   color: var(--muted);
   text-decoration: line-through;
 }
+
+/* Shown while Bedrock is unavailable and the offline parser answers. */
+.provider-badge.offline {
+  background: var(--orange-light);
+  color: var(--orange);
+  border-color: transparent;
+}

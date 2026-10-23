@@ -636,12 +636,12 @@ export function createApplication({ store, env = process.env, interpret, bedrock
         result = await agentChat(requested, message);
       } catch (err) {
         // When Bedrock can't answer (account not enabled, outage, timeout), keep cooking with the offline
-        // parser and say so plainly. Daily-limit (429) and storage (503) errors are still reported as errors.
+        // parser. The response is flagged so the app can show an "Offline mode" badge; replies stay clean
+        // because they are read aloud. Daily-limit (429) and storage (503) errors are still reported as errors.
         if (err.status !== 502) throw err;
         const offline = demoChat(requested, message);
         result = {
           ...offline,
-          reply: `AWS AI is unavailable right now, so I used offline mode. ${offline.reply}`,
           fallback: 'offline',
           fallbackReason: err.message,
         };

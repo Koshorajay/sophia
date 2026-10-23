@@ -310,10 +310,10 @@ test('model failure falls back to the offline parser and says so; it never prete
   const answered = await call('/api/chat', { message: 'Cook pasta for 2' });
   assert.equal(answered.status, 200);
   assert.equal(answered.json.fallback, 'offline');
-  assert.match(answered.json.reply, /^AWS AI is unavailable right now, so I used offline mode\./);
+  assert.doesNotMatch(answered.json.reply, /unavailable/, 'replies stay clean; the app shows a badge instead');
   assert.ok(!answered.json.usage && !answered.json.toolCalls, 'no model usage is reported');
   assert.equal(answered.json.state.session.dishId, 'pasta');
-  assert.match(answered.json.state.conversation.at(-1).content, /offline mode/);
+  assert.ok(answered.json.state.conversation.at(-1).content.length > 0);
 });
 
 test('Bedrock agent cannot run unknown tools, smuggle arguments, or confirm two steps at once', async () => {

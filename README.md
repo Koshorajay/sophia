@@ -66,7 +66,7 @@ AWS_PROFILE=sophia AWS_REGION=us-east-1 SOPHIA_PROVIDER=bedrock BEDROCK_MODEL_ID
 
 `SOPHIA_VOICE=polly` makes spoken replies use Amazon Polly's Kajal voice; leave it out to use the browser's voice.
 
-If Bedrock can't answer (for example, an AWS account where Bedrock isn't enabled yet, or a timeout), the chat keeps working with the offline parser and starts its reply with "AWS AI is unavailable right now, so I used offline mode." The real AWS error goes to the server log.
+If Bedrock can't answer (for example, an AWS account where Bedrock isn't enabled yet, or a timeout), the chat keeps working with the offline parser and the chat header shows an "Offline mode" badge. The real AWS error goes to the server log.
 
 ## Use Sophia from any MCP client
 
