@@ -476,7 +476,10 @@ export function createApplication({
         reply: `Choose one dish for this cooking session: ${dishes.map(d => d.name).join(' or ')}. Each dish has its own portion plan.`,
       };
     const dishId = dishes[0]?.id;
-    if (dishId && /\b(cook|make|plan|prepare|start)\b/.test(t)) {
+    // "Dal for the three of us" plans as well as "Make dal for 3".
+    const forPeople =
+      /\bfor (?:the )?(?:\d+|one|two|three|four|five|six|seven|eight)(?: of us)?\b|\bfor (?:all of us|us all|everyone|the family|us)\b/;
+    if (dishId && (/\b(cook|make|plan|prepare|start)\b/.test(t) || (forPeople.test(t) && !question))) {
       const count = t.match(
         /(?:for|serve|serves|servings?(?: of)?)\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b/,
       )?.[1];

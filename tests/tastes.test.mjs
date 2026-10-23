@@ -64,7 +64,7 @@ test('chat: "Remember Noor loves ghee", then "Dal for the three of us" uses ever
   const save = await call('/api/chat', { message: 'Remember Noor loves ghee' });
   assert.equal(save.json.action, 'tastes');
   assert.deepEqual(save.json.state.household.find(p => p.name === 'Noor').tastes, ['ghee', 'egg']);
-  const plan = await call('/api/chat', { message: 'Make dal for the three of us' });
+  const plan = await call('/api/chat', { message: 'Dal for the three of us' });
   assert.deepEqual(plates(plan.json.state), { Asha: 'mild', Ravi: 'spicy', Noor: 'ghee' });
 
   const ask = await call('/api/chat', { message: 'What does Noor like?' });
