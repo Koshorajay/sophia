@@ -13,6 +13,7 @@ Sophia's kitchen is an **MCP server** (spec 2025-11-25, Streamable HTTP), the op
 
 - **Splits at the right moment.** "Dal for the three of us, Ravi likes it spicy." Sophia cooks one pot of dal, splits it, and gives only Ravi's bowl a red chilli tadka.
 - **Knows what's already in the pot.** "Actually, no chilli for Ravi" works until his tadka happens. "Remove the onion" after the onion is cooked is refused, with the reason. The AI can't talk its way around this: every action goes through a deterministic kitchen engine.
+- **Remembers how each person likes it.** Say "Noor loves ghee" or "Ravi can't eat chilli any more", or tap the Family tastes card. Every dish then gives each plate the first saved taste it offers, so "Make dal for the three of us" needs no extra words.
 - **Hands-free kitchen mode.** Big-type steps, voice control ("next", "repeat", "start the timer") and step timers.
 - **Optional Gemini AI.** While Bedrock is unavailable on a new AWS account, an "AI: Gemini" switch in the chat lets Google Gemini understand free conversation, through the very same tools and rules. Off by default; short commands like "done" never need a model.
 - **Talks back.** Turn on Voice replies and Sophia reads every answer and each new step aloud: with the Amazon Polly neural voice Kajal (Indian English) when deployed, or the browser's own voice locally.
@@ -31,7 +32,8 @@ Sophia's kitchen is an **MCP server** (spec 2025-11-25, Streamable HTTP), the op
                                search_recipes, plan_meal, get_kitchen_state,
                                complete_current_step, alter_portion, finish_meal,
                                cancel_meal, update_pantry, forecast_groceries,
-                               check_pantry, add_to_shopping_list, update_shopping_list
+                               check_pantry, add_to_shopping_list, update_shopping_list,
+                               save_tastes
                                          |
                               Kitchen engine (src/engine.mjs)
                               the only code that changes state
@@ -84,6 +86,7 @@ If Bedrock can't answer (for example, an AWS account where Bedrock isn't enabled
 | `update_pantry` / `forecast_groceries` | Set confirmed stock; estimate groceries from confirmed cooked meals |
 | `check_pantry` | What a dish (or the active meal) needs beyond the entered stock |
 | `add_to_shopping_list` / `update_shopping_list` | Save what's missing to the household list; tick off, remove or clear items. Nothing is ordered |
+| `save_tastes` | Remember one person's favourite finishes (most liked first) for every future meal |
 
 Most clients take a URL plus optional headers:
 
